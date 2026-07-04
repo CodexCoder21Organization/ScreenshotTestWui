@@ -1,0 +1,8 @@
+jars/
+*.class
+*.jar
+.aibuildcaches/
+build/
+out/
+build-fats/
+*.xml

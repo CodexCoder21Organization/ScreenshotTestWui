@@ -1,0 +1,6 @@
+{
+  "name": "screenshottest-wui",
+  "source": "src",
+  "buildscript": "build.kts",
+  "readme": "README.md"
+}
