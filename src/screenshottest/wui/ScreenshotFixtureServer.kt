@@ -109,8 +109,11 @@ private val SESSIONS: List<FixtureSession> = listOf(COMPARE_SESSION, RECORD_SESS
  * Every produced image, keyed `"<sessionId>|<key>|<kind>"`. Built once, deterministically. Each is a
  * small mock "page" (actual/golden) or a diff heatmap so the detail page's inline thumbnails render as
  * plausible screenshots rather than blank boxes.
+ *
+ * Built lazily (on the first image request) rather than during class initialization, so [main] has
+ * already set `java.awt.headless` before any AWT/ImageIO code runs.
  */
-private val IMAGES: Map<String, ByteArray> = buildImages()
+private val IMAGES: Map<String, ByteArray> by lazy { buildImages() }
 
 private fun buildImages(): Map<String, ByteArray> {
     val map = LinkedHashMap<String, ByteArray>()
