@@ -64,10 +64,16 @@ class ImageServlet : HttpServlet() {
             val slice = try {
                 api.getImageChunk(id, key, kind, offset, CHUNK_SIZE)
             } catch (e: Exception) {
-                // Headers/body are already on the wire, so we cannot switch to an error status.
-                // Log and stop; the client sees a short read rather than corrupt data.
+                // The response is already committed (status 200 + chunked body), so we cannot switch
+                // to an error status. Returning normally would let Jetty finish the chunked stream
+                // cleanly, handing the client a truncated-but-complete-looking PNG it could not tell
+                // from a whole image. Instead we rethrow: Jetty aborts the in-flight chunked response
+                // (the terminating chunk is never sent), so the client sees a premature end of stream
+                // and treats the image as failed rather than silently accepting corrupt bytes.
                 System.err.println("[ImageServlet] Error streaming image id=$id key=$key kind=$kind at offset=$offset: ${e.javaClass.name}: ${e.message}")
-                return
+                throw java.io.IOException(
+                    "Image stream for session \"$id\", key \"$key\", kind \"$kind\" failed at offset $offset: ${e.message}", e
+                )
             } ?: break
             if (slice.isEmpty()) break
             out.write(slice)
@@ -77,23 +83,23 @@ class ImageServlet : HttpServlet() {
         resp.flushBuffer()
     }
 
-    private fun badRequest(resp: HttpServletResponse, message: String) {
-        resp.status = HttpServletResponse.SC_BAD_REQUEST
-        resp.contentType = "text/plain; charset=UTF-8"
-        resp.writer.write(message)
-    }
-
-    private fun notFound(resp: HttpServletResponse, message: String) {
-        resp.status = HttpServletResponse.SC_NOT_FOUND
-        resp.contentType = "text/plain; charset=UTF-8"
-        resp.writer.write(message)
-    }
-
     companion object {
         /** Per-slice request size, matching the service's 1 MiB per-chunk cap. Bounds WUI heap. */
         const val CHUNK_SIZE = 1024 * 1024
         private val VALID_KINDS = setOf("actual", "golden", "diff")
     }
+}
+
+private fun badRequest(resp: HttpServletResponse, message: String) {
+    resp.status = HttpServletResponse.SC_BAD_REQUEST
+    resp.contentType = "text/plain; charset=UTF-8"
+    resp.writer.write(message)
+}
+
+private fun notFound(resp: HttpServletResponse, message: String) {
+    resp.status = HttpServletResponse.SC_NOT_FOUND
+    resp.contentType = "text/plain; charset=UTF-8"
+    resp.writer.write(message)
 }
 
 private fun sanitizeForFilename(s: String): String =

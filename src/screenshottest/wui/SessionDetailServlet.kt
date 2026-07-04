@@ -50,7 +50,8 @@ class SessionDetailServlet : HttpServlet() {
         val mode = results?.optString("mode", "") ?: ""
 
         val html = buildString {
-            append(pageHeader("ScreenshotTest - Session ${escapeHtml(id)}"))
+            // pageHeader escapes the whole title, so pass the raw id (escaping it here would double-escape).
+            append(pageHeader("ScreenshotTest - Session $id"))
             append("<div class=\"container\">")
             append("<p><a href=\"/\">&larr; All sessions</a></p>")
             append("<h1 class=\"mono\">${escapeHtml(id)}</h1>")

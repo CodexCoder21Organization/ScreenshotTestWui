@@ -20,6 +20,9 @@ class SessionListServlet : HttpServlet() {
         val sessions: JSONArray = try {
             JSONArray(api.listSessions())
         } catch (e: Exception) {
+            // A backend/RPC failure is an upstream problem, not a client error — surface it as 502 so
+            // health checks and monitors see a non-200, rather than a misleading 200 with an error body.
+            resp.status = HttpServletResponse.SC_BAD_GATEWAY
             resp.writer.write(errorPage("Failed to load sessions: ${escapeHtml(e.message ?: e.javaClass.name)}"))
             return
         }

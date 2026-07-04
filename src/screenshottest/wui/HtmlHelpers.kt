@@ -67,14 +67,6 @@ fun modeBadgeHtml(mode: String): String {
     return "<span class=\"badge $cls\">${escapeHtml(mode)}</span>"
 }
 
-/** Formats a byte count as a human-readable string (e.g. "2.1 MB", "450 KB", "512 B"). */
-fun formatBytes(bytes: Long): String = when {
-    bytes < 1024 -> "$bytes B"
-    bytes < 1024L * 1024 -> "${"%.1f".format(bytes / 1024.0)} KB"
-    bytes < 1024L * 1024 * 1024 -> "${"%.1f".format(bytes / (1024.0 * 1024.0))} MB"
-    else -> "${"%.1f".format(bytes / (1024.0 * 1024.0 * 1024.0))} GB"
-}
-
 fun pageHeader(title: String): String {
     return """<!DOCTYPE html>
 <html lang="en">

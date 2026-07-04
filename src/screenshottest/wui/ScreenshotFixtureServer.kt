@@ -178,7 +178,9 @@ private fun mockDiff(w: Int, h: Int, hasDifferences: Boolean): ByteArray {
 
 private fun toPng(img: BufferedImage): ByteArray {
     val out = ByteArrayOutputStream()
-    ImageIO.write(img, "png", out)
+    // write returns false when no PNG writer is registered — surface that instead of silently
+    // producing an empty (0-byte) image.
+    check(ImageIO.write(img, "png", out)) { "No PNG ImageIO writer available on this JVM." }
     return out.toByteArray()
 }
 
@@ -232,9 +234,16 @@ private fun buildFixtureApi(): ScreenshotTestApi = object : ScreenshotTestApi {
     }
 
     override fun getImageChunk(sessionId: String, key: String, kind: String, offset: Long, length: Int): ByteArray? {
-        session(sessionId) // validates the id per contract
+        val s = session(sessionId) // validates the id per contract
         require(kind == "actual" || kind == "golden" || kind == "diff") {
             "kind must be \"actual\", \"diff\", or \"golden\", but was \"$kind\"."
+        }
+        require(offset >= 0) { "offset must be >= 0, but was $offset." }
+        require(length > 0) { "length must be > 0, but was $length." }
+        // Unknown key -> reject per contract; a known key whose (key,kind) has no image (e.g. golden
+        // for a record-mode key) -> null (image absent / exhausted).
+        require(s.results.any { it.key == key }) {
+            "Session '$sessionId' produced no image for key '$key'."
         }
         val bytes = IMAGES["$sessionId|$key|$kind"] ?: return null
         if (offset >= bytes.size) return null
