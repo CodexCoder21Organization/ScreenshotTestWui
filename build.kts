@@ -21,7 +21,7 @@ val dependencies = resolveDependencies2(
     // 0.0.556 / 0.0.303: matched pair. protocol 0.0.303 = inbound mux-substream OOM fixes;
     //          resolver 0.0.556 is compiled against protocol 0.0.303 and is binary-compatible
     //          with it. They MUST be bumped together. Kept in lockstep with BuildTestWui.
-    MavenPrebuilt2("foundation.url:resolver:0.0.556"),
+    MavenPrebuilt2("foundation.url:resolver:0.0.600"),
     MavenPrebuilt2("foundation.url:protocol:0.0.303"),
     // SJVM for sandboxed execution (required by UrlResolver.openSandboxedConnection)
     MavenPrebuilt2("net.javadeploy.sjvm:libSJVM-jvm:0.0.38"),
