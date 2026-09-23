@@ -221,9 +221,20 @@ fun imageEndpointConcurrentSandboxedLoadsTest() {
             )
         }
         val slow = results.filter { it.third > proxyReadTimeoutMs }
+        // Which sandbox stack this JVM actually loaded, so a slow run shows whether an older SJVM or
+        // resolver reached the classpath (SJVM releases before 0.0.47 serialize concurrent calls).
+        val loadedStack = listOf(
+            "net.javadeploy.sjvm.impl.SJVMImpl",
+            "foundation.url.resolver.UrlResolver",
+            "foundation.url.protocol.ServiceHandler",
+        ).joinToString(", ") { name ->
+            val location = Class.forName(name).protectionDomain.codeSource?.location?.path ?: "unknown"
+            location.substringAfterLast('/')
+        }
         assertTrue(
             slow.isEmpty(),
-            "Each of $requestCount concurrent thumbnail requests must complete within ContainerNursery's " +
+            "[loaded: $loadedStack; ${Runtime.getRuntime().availableProcessors()} processors] " +
+                "Each of $requestCount concurrent thumbnail requests must complete within ContainerNursery's " +
                 "${proxyReadTimeoutMs}ms proxy read timeout, otherwise the browser receives 503 instead of the " +
                 "image; ${slow.size} did not. All requests: $summary"
         )
