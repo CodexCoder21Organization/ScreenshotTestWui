@@ -24,7 +24,13 @@ class SessionDetailServlet : HttpServlet() {
             resp.writer.write(errorPage("Missing required query parameter \"id\" (the session id to display)."))
             return
         }
-        val api = servletContext.getScreenshotTestApi()
+        val api = try {
+            servletContext.getScreenshotTestApi()
+        } catch (e: Exception) {
+            resp.status = HttpServletResponse.SC_BAD_GATEWAY
+            resp.writer.write(errorPage("Failed to load session \"${escapeHtml(id)}\": ${escapeHtml(e.message ?: e.javaClass.name)}"))
+            return
+        }
         val clock = servletContext.getScreenshotTestClock()
         val page = renderSessionDetailPage(
             api, clock.currentTimeMillis(), id, null,

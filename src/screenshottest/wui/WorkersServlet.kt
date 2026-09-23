@@ -21,7 +21,14 @@ const val WORKERS_REFRESH_SECONDS = 15
  */
 class WorkersServlet : HttpServlet() {
     override fun doGet(req: HttpServletRequest, resp: HttpServletResponse) {
-        val api = servletContext.getScreenshotTestApi()
+        val api = try {
+            servletContext.getScreenshotTestApi()
+        } catch (e: Exception) {
+            resp.status = HttpServletResponse.SC_BAD_GATEWAY
+            resp.contentType = "text/html; charset=UTF-8"
+            resp.writer.write(errorPage("Failed to load the render worker pool: ${escapeHtml(e.message ?: e.javaClass.name)}"))
+            return
+        }
         val clock = servletContext.getScreenshotTestClock()
         val page = renderWorkersPage(
             api, clock.currentTimeMillis(), null,

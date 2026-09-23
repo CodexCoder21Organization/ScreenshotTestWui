@@ -58,6 +58,8 @@ The currently pinned UrlResolver wraps exceptions raised inside the remote servi
 `SandboxException` without a structured remote exception type, so those remote validation and state
 errors currently use `502` while still showing the full service message. This transport limitation
 needs a typed exception field before the WUI can distinguish them reliably.
+If the WUI cannot establish its API connection while loading `/`, `/workers`, or `/session`, that page
+also returns `502` and shows the connection error.
 A POST that the browser labels as coming from another site (`Sec-Fetch-Site: cross-site` or
 `same-site`) is refused with `403`.
 

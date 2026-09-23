@@ -42,11 +42,17 @@ fun actionProviderFailureReturns502Test() {
             val body = conn.errorStream.bufferedReader().readText()
             assertTrue(body.contains("connection failed"), "The provider's full message must appear in the page: $body")
         }
-        for (path in listOf("/", "/workers", "/session?id=sess-1")) {
+        for ((path, expectedError) in listOf(
+            "/" to "Failed to load sessions: connection failed",
+            "/workers" to "Failed to load the render worker pool: connection failed",
+            "/session?id=sess-1" to "Failed to load session \"sess-1\": connection failed",
+        )) {
             val conn = URL("http://localhost:$port$path").openConnection() as HttpURLConnection
             assertEquals(502, conn.responseCode, "A provider failure while loading $path must return 502")
             val body = conn.errorStream.bufferedReader().readText()
-            assertTrue(body.contains("connection failed"), "The provider's full message must appear in the page: $body")
+            val displayedError = Regex("""<div class="info-value text-red">([^<]*)</div>""")
+                .find(body)?.groupValues?.get(1)
+            assertEquals(expectedError, displayedError, "The page for $path must show the complete provider error")
         }
     } finally {
         server.stop()

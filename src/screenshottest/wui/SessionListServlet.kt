@@ -19,7 +19,14 @@ class PageResult(val status: Int, val html: String)
  */
 class SessionListServlet : HttpServlet() {
     override fun doGet(req: HttpServletRequest, resp: HttpServletResponse) {
-        val api = servletContext.getScreenshotTestApi()
+        val api = try {
+            servletContext.getScreenshotTestApi()
+        } catch (e: Exception) {
+            resp.status = HttpServletResponse.SC_BAD_GATEWAY
+            resp.contentType = "text/html; charset=UTF-8"
+            resp.writer.write(errorPage("Failed to load sessions: ${escapeHtml(e.message ?: e.javaClass.name)}"))
+            return
+        }
         val clock = servletContext.getScreenshotTestClock()
         val page = renderSessionListPage(api, clock.currentTimeMillis(), null,
             req.getParameter("notice"), req.getParameter("noticeId"))
