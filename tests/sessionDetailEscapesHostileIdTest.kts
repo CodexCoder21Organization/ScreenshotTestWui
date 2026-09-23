@@ -8,13 +8,14 @@
 @file:WithArtifact("org.eclipse.jetty:jetty-security:11.0.20")
 @file:WithArtifact("jakarta.servlet:jakarta.servlet-api:5.0.0")
 @file:WithArtifact("org.json:json:20250517")
-@file:WithArtifact("community.kotlin.clocks.simple:community-kotlin-clocks-simple:0.0.3")
+@file:WithArtifact("community.kotlin.clocks.simple:community-kotlin-clocks-simple:0.0.11")
+@file:WithArtifact("community.kotlin.clocks.hierarchical:community-kotlin-clocks-hierarchical:0.0.6")
 @file:WithArtifact("org.jetbrains.kotlin:kotlin-stdlib:1.9.22")
 @file:WithArtifact("org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.9.22")
 @file:WithArtifact("org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.9.22")
 @file:WithArtifact("org.jetbrains.kotlin:kotlin-test:1.9.22")
 @file:WithArtifact("org.slf4j:slf4j-api:1.7.36")
-@file:WithArtifact("org.slf4j:slf4j-simple:1.7.36")
+@file:WithArtifact("org.slf4j:slf4j-simple:2.0.9")
 package screenshottest.wui
 
 import build.kotlin.withartifact.WithArtifact

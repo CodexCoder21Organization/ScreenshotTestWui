@@ -18,22 +18,26 @@ val dependencies = resolveDependencies2(
     // Jakarta Servlet API
     MavenPrebuilt2("jakarta.servlet:jakarta.servlet-api:5.0.0"),
     // UrlResolver and UrlProtocol — the WUI connects to url://screenshottest/ as a typed proxy.
-    // 0.0.556 / 0.0.303: matched pair. protocol 0.0.303 = inbound mux-substream OOM fixes;
-    //          resolver 0.0.556 is compiled against protocol 0.0.303 and is binary-compatible
-    //          with it. They MUST be bumped together. Kept in lockstep with BuildTestWui.
-    MavenPrebuilt2("foundation.url:resolver:0.0.600"),
-    MavenPrebuilt2("foundation.url:protocol:0.0.303"),
-    // SJVM for sandboxed execution (required by UrlResolver.openSandboxedConnection)
-    MavenPrebuilt2("net.javadeploy.sjvm:libSJVM-jvm:0.0.38"),
-    MavenPrebuilt2("net.javadeploy.sjvm:avianStdlibHelper-jvm:0.0.38"),
-    MavenPrebuilt2("net.javadeploy.sjvm:stdlibHelperCommon-jvm:0.0.38"),
+    // Resolver 0.0.1171 pairs protocol 0.0.503, libp2p snapshot-26 and SJVM 0.0.50; the four MUST
+    // move together. Kept in lockstep with BuildTestWui, which runs the same set in production.
+    MavenPrebuilt2("foundation.url:resolver:0.0.1171", resolveTransitiveDependencies = false),
+    MavenPrebuilt2("foundation.url:protocol:0.0.503", resolveTransitiveDependencies = false),
+    // SJVM for sandboxed execution (required by UrlResolver.openSandboxedConnection).
+    // Must be >= 0.0.47: older releases take a suspending class-loader mutex on every class lookup
+    // (https://github.com/CodexCoder21Organization/sandboxjvm/pull/93), so a session page's
+    // concurrent thumbnail requests queue behind one another for 40+ seconds and ContainerNursery
+    // answers 503 (tests/imageEndpointConcurrentSandboxedLoadsTest.kts).
+    MavenPrebuilt2("net.javadeploy.sjvm:libSJVM-jvm:0.0.50"),
+    MavenPrebuilt2("net.javadeploy.sjvm:avianStdlibHelper-jvm:0.0.50"),
+    MavenPrebuilt2("net.javadeploy.sjvm:stdlibHelperCommon-jvm:0.0.50"),
     // ASM for bytecode manipulation (required by UrlResolver sandbox proxy generation)
     MavenPrebuilt2("org.ow2.asm:asm:9.8"),
     MavenPrebuilt2("org.ow2.asm:asm-commons:9.8"),
     MavenPrebuilt2("org.ow2.asm:asm-util:9.8"),
     MavenPrebuilt2("org.ow2.asm:asm-tree:9.8"),
     // Clock abstraction (required by UrlProtocol and by the WUI's createServer seam)
-    MavenPrebuilt2("community.kotlin.clocks.simple:community-kotlin-clocks-simple:0.0.3"),
+    MavenPrebuilt2("community.kotlin.clocks.simple:community-kotlin-clocks-simple:0.0.11"),
+    MavenPrebuilt2("community.kotlin.clocks.hierarchical:community-kotlin-clocks-hierarchical:0.0.6"),
     // RPC protocol
     MavenPrebuilt2("community.kotlin.rpc:protocol-api:0.0.2"),
     MavenPrebuilt2("community.kotlin.rpc:protocol-impl:0.0.11"),
@@ -54,9 +58,9 @@ val dependencies = resolveDependencies2(
     MavenPrebuilt2("org.jetbrains.kotlinx:kotlinx-coroutines-core-jvm:1.8.0"),
     // Logging
     MavenPrebuilt2("org.slf4j:slf4j-api:1.7.36"),
-    MavenPrebuilt2("org.slf4j:slf4j-simple:1.7.36"),
+    MavenPrebuilt2("org.slf4j:slf4j-simple:2.0.9"),
     // libp2p
-    MavenPrebuilt2("community.kotlin.libp2p:jvm-libp2p:1.3.0-codexcoder21-snapshot-4"),
+    MavenPrebuilt2("community.kotlin.libp2p:jvm-libp2p:1.3.0-codexcoder21-snapshot-26"),
     MavenPrebuilt2("com.google.protobuf:protobuf-java:3.25.1"),
     MavenPrebuilt2("tech.pegasys:noise-java:22.1.0"),
     // Netty (for libp2p)
@@ -79,7 +83,7 @@ val dependencies = resolveDependencies2(
     MavenPrebuilt2("com.google.guava:guava:33.2.0-jre"),
     MavenPrebuilt2("com.google.guava:failureaccess:1.0.2"),
     // UrlResolver transitive dependencies
-    MavenPrebuilt2("community.kotlin.observable:core-jvm:0.2.3"),
+    MavenPrebuilt2("community.kotlin.observable:core-jvm:0.3.21"),
     MavenPrebuilt2("util.stacktrace:util-stacktrace:0.0.1"),
     MavenPrebuilt2("kompile.effects:kompile-effects:0.0.1"),
     MavenPrebuilt2("community.kotlin.logging:community-kotlin-logging:0.0.1"),
@@ -127,7 +131,14 @@ fun buildMaven(): File {
         //        - New "/workers" page: pool status, rendering + queued tables, set max workers.
         //        - POST /session/cancel, /session/delete, /workers/max with 303 + enumerated notice
         //          on success and 400/404/409/502 error banners carrying the service's message.
-        coordinates = "screenshottest.wui:screenshottest-wui:0.0.2",
+        // 0.0.3: Session pages load their thumbnails promptly again.
+        //        - Bump the url:// client stack to resolver 0.0.1171 / protocol 0.0.503 /
+        //          libp2p snapshot-26 / SJVM 0.0.50. With SJVM 0.0.38 a page's concurrent
+        //          thumbnail requests took 40-75 s each inside the sandbox, so ContainerNursery
+        //          answered most of them with 503 "Read timed out".
+        //        - Only DIFF keys get a diff thumbnail; the service writes no diff heatmap for
+        //          MATCH keys, so that <img> always failed.
+        coordinates = "screenshottest.wui:screenshottest-wui:0.0.3",
         src = File("src"),
         compileDependencies = dependencies
     )
@@ -140,4 +151,34 @@ fun buildSkinnyJar(): File {
 fun buildFatJar(): File {
     val manifest = Manifest("screenshottest.wui.MainKt")
     return BuildJar(manifest, dependencies.map { it.jar } + buildSkinnyJar())
+}
+
+// Test fixture: the SJVM client bytecode an in-process url:// provider serves to the WUI's sandbox
+// in tests/imageEndpointConcurrentSandboxedLoadsTest.kts. Same shape as the production client jar
+// (client class + screenshottest-api + service-bridge-stub + kotlin-stdlib).
+val sandboxClientFixtureDependencies = resolveDependencies2(
+    MavenPrebuilt2("org.jetbrains.kotlin:kotlin-stdlib:1.9.22"),
+    MavenPrebuilt2("screenshottest.api:screenshottest-api:0.0.3"),
+    MavenPrebuilt2("foundation.url:service-bridge-stub:0.0.1"),
+)
+
+fun buildSandboxClientFixtureJar(): File {
+    val artifact = buildSimpleKotlinMavenArtifact(
+        coordinates = "screenshottest.wui:screenshottest-wui-sandbox-client-fixture:0.0.1",
+        src = File("test-fixtures/sandbox-client"),
+        compileDependencies = sandboxClientFixtureDependencies
+    )
+    return artifact.jar
+}
+
+/** Wraps the fat sandbox client fixture as the classpath resource `sandbox-client-impl.jar`. */
+fun buildSandboxClientFixtureResourcesJar(): File {
+    val clientFatJar = BuildJar(null, sandboxClientFixtureDependencies.map { it.jar } + buildSandboxClientFixtureJar())
+    val tempFile = java.io.File.createTempFile("sandbox-client-fixture-resources", ".jar")
+    java.util.jar.JarOutputStream(tempFile.outputStream()).use { jos ->
+        jos.putNextEntry(java.util.jar.JarEntry("sandbox-client-impl.jar"))
+        jos.write(clientFatJar.readBytes())
+        jos.closeEntry()
+    }
+    return tempFile
 }

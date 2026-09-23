@@ -7,7 +7,8 @@
 @file:WithArtifact("org.eclipse.jetty:jetty-util:11.0.20")
 @file:WithArtifact("org.eclipse.jetty:jetty-security:11.0.20")
 @file:WithArtifact("jakarta.servlet:jakarta.servlet-api:5.0.0")
-@file:WithArtifact("community.kotlin.clocks.simple:community-kotlin-clocks-simple:0.0.3")
+@file:WithArtifact("community.kotlin.clocks.simple:community-kotlin-clocks-simple:0.0.11")
+@file:WithArtifact("community.kotlin.clocks.hierarchical:community-kotlin-clocks-hierarchical:0.0.6")
 @file:WithArtifact("org.jetbrains.kotlin:kotlin-stdlib:1.9.22")
 @file:WithArtifact("org.jetbrains.kotlin:kotlin-test:1.9.22")
 package screenshottest.wui

@@ -8,13 +8,14 @@
 @file:WithArtifact("org.eclipse.jetty:jetty-security:11.0.20")
 @file:WithArtifact("jakarta.servlet:jakarta.servlet-api:5.0.0")
 @file:WithArtifact("org.json:json:20250517")
-@file:WithArtifact("community.kotlin.clocks.simple:community-kotlin-clocks-simple:0.0.3")
+@file:WithArtifact("community.kotlin.clocks.simple:community-kotlin-clocks-simple:0.0.11")
+@file:WithArtifact("community.kotlin.clocks.hierarchical:community-kotlin-clocks-hierarchical:0.0.6")
 @file:WithArtifact("org.jetbrains.kotlin:kotlin-stdlib:1.9.22")
 @file:WithArtifact("org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.9.22")
 @file:WithArtifact("org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.9.22")
 @file:WithArtifact("org.jetbrains.kotlin:kotlin-test:1.9.22")
 @file:WithArtifact("org.slf4j:slf4j-api:1.7.36")
-@file:WithArtifact("org.slf4j:slf4j-simple:1.7.36")
+@file:WithArtifact("org.slf4j:slf4j-simple:2.0.9")
 package screenshottest.wui
 
 import build.kotlin.withartifact.WithArtifact
@@ -25,8 +26,9 @@ import screenshottest.api.ScreenshotTestApi
 
 /**
  * A COMPLETED compare session's detail page must render the per-key verdict table (key, verdict,
- * diff pixels / total, max channel delta, golden & actual dimensions) and, for each compared key
- * (MATCH or DIFF), inline actual/golden/diff thumbnails pointing at the /image endpoint.
+ * diff pixels / total, max channel delta, golden & actual dimensions) and inline thumbnails pointing
+ * at the /image endpoint: actual + golden for a MATCH key, actual + golden + diff for a DIFF key. The
+ * service writes a diff heatmap only for DIFF keys, so a diff <img> on a MATCH key could only fail.
  */
 fun sessionDetailRendersVerdictTableTest() {
     val statusJson = """{"sessionId":"sess-cmp","state":"COMPLETED","error":null,"rendererVersion":"chromium-1228"}"""
@@ -77,15 +79,18 @@ fun sessionDetailRendersVerdictTableTest() {
         assertTrue(html.contains("460&times;340"), "Expected the runs-list 460x340 dimensions.")
         assertTrue(html.contains("460&times;300"), "Expected the run-detail 460x300 dimensions.")
 
-        // Inline thumbnails: actual/golden/diff for BOTH compared keys.
-        for (key in listOf("runs-list", "run-detail")) {
-            for (kind in listOf("actual", "golden", "diff")) {
-                val expected = "/image?id=sess-cmp&amp;key=$key&amp;kind=$kind"
-                assertTrue(
-                    html.contains("<img src=\"$expected\""),
-                    "Expected an inline <img> for key '$key' kind '$kind' (src '$expected'); page was:\n$html"
-                )
-            }
+        // Inline thumbnails: exactly the images the service produces for each verdict.
+        val expectedKinds = mapOf(
+            "runs-list" to listOf("actual", "golden"),          // MATCH: no diff heatmap exists
+            "run-detail" to listOf("actual", "golden", "diff"), // DIFF
+        )
+        for ((key, kinds) in expectedKinds) {
+            val rendered = Regex("<img src=\"/image\\?id=sess-cmp&amp;key=${Regex.escape(key)}&amp;kind=([a-z]+)\"")
+                .findAll(html).map { it.groupValues[1] }.toList()
+            assertEquals(
+                kinds, rendered,
+                "Expected exactly the $kinds thumbnails for key '$key', in that order; page was:\n$html"
+            )
         }
     } finally {
         server.stop()

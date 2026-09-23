@@ -52,7 +52,10 @@ private class FixtureResult(
     val maxChannelDelta: Int,
     val width: Int,
     val height: Int,
-    /** True when a golden was submitted (compare-mode MATCH/DIFF): `golden`/`diff` images exist. */
+    /**
+     * True when a golden was submitted (compare-mode MATCH/DIFF): a `golden` image exists. Like the
+     * real service, only a DIFF key also has a `diff` heatmap.
+     */
     val hasGolden: Boolean,
 ) {
     val totalPixels: Long get() = width.toLong() * height.toLong()
@@ -187,7 +190,9 @@ private fun buildImages(): Map<String, ByteArray> {
             map["${session.sessionId}|${r.key}|actual"] = mockPage(r.width, r.height, accent = Color(0x3f, 0xb9, 0x50))
             if (r.hasGolden) {
                 map["${session.sessionId}|${r.key}|golden"] = mockPage(r.width, r.height, accent = Color(0x58, 0xa6, 0xff))
-                map["${session.sessionId}|${r.key}|diff"] = mockDiff(r.width, r.height, r.verdict == "DIFF")
+            }
+            if (r.verdict == "DIFF") {
+                map["${session.sessionId}|${r.key}|diff"] = mockDiff(r.width, r.height)
             }
         }
     }
@@ -224,18 +229,16 @@ private fun mockPage(w: Int, h: Int, accent: Color): ByteArray {
 }
 
 /** Draws a deterministic diff heatmap: near-black with scattered red difference blocks. */
-private fun mockDiff(w: Int, h: Int, hasDifferences: Boolean): ByteArray {
+private fun mockDiff(w: Int, h: Int): ByteArray {
     val img = BufferedImage(w, h, BufferedImage.TYPE_INT_RGB)
     val g = img.createGraphics()
     g.color = Color(0x0a, 0x0a, 0x0a); g.fillRect(0, 0, w, h)
-    if (hasDifferences) {
-        val rnd = Random(42L)  // fixed seed -> byte-stable heatmap
-        g.color = Color(0xf8, 0x51, 0x49)
-        repeat(60) {
-            val bx = rnd.nextInt(w - 12)
-            val by = rnd.nextInt(h - 12)
-            g.fillRect(bx, by, 6 + rnd.nextInt(8), 4 + rnd.nextInt(6))
-        }
+    val rnd = Random(42L)  // fixed seed -> byte-stable heatmap
+    g.color = Color(0xf8, 0x51, 0x49)
+    repeat(60) {
+        val bx = rnd.nextInt(w - 12)
+        val by = rnd.nextInt(h - 12)
+        g.fillRect(bx, by, 6 + rnd.nextInt(8), 4 + rnd.nextInt(6))
     }
     g.dispose()
     return toPng(img)
@@ -367,7 +370,8 @@ private fun buildFixtureApi(): ScreenshotTestApi = object : ScreenshotTestApi {
 
 /**
  * Entry point launched on the ScreenshotTest worker. Reads the port from `PORT` (defaulting to 8080
- * for local inspection) and serves the deterministic fixture WUI against a frozen clock.
+ * for local inspection; the worker passes 0) and serves the deterministic fixture WUI against a frozen
+ * clock, announcing the bound loopback endpoint on stdout for the runner.
  */
 fun main() {
     System.setProperty("java.awt.headless", "true")
