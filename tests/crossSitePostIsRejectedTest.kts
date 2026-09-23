@@ -20,8 +20,6 @@ package screenshottest.wui
 import build.kotlin.withartifact.WithArtifact
 import community.kotlin.clocks.simple.ManualClock
 import kotlin.test.*
-import java.net.HttpURLConnection
-import java.net.URL
 import screenshottest.api.ScreenshotTestApi
 
 /**
@@ -74,43 +72,46 @@ fun crossSitePostIsRejectedTest() {
             cancels.add(sessionId to reason)
         }
     }
-    fun get(port: Int, path: String): Pair<Int, String> {
-        val conn = URL("http://localhost:$port$path").openConnection() as HttpURLConnection
-        conn.instanceFollowRedirects = false
-        val code = conn.responseCode
-        val body = (if (code < 400) conn.inputStream else conn.errorStream).bufferedReader().readText()
-        return code to body
+    // HttpURLConnection silently drops browser-only request headers such as Sec-Fetch-Site and
+    // Origin (JDK "restricted headers"), so requests that must carry them are written over a plain
+    // socket. Returns (status code, response body).
+    fun rawPost(port: Int, path: String, form: String, headers: Map<String, String>): Pair<Int, String> {
+        java.net.Socket("localhost", port).use { socket ->
+            val body = form.toByteArray(Charsets.UTF_8)
+            val head = StringBuilder()
+            head.append("POST $path HTTP/1.0\r\nHost: localhost:$port\r\n")
+            head.append("Content-Type: application/x-www-form-urlencoded\r\nContent-Length: ${body.size}\r\n")
+            for ((k, v) in headers) head.append("$k: $v\r\n")
+            head.append("\r\n")
+            val out = socket.getOutputStream()
+            out.write(head.toString().toByteArray(Charsets.UTF_8))
+            out.write(body)
+            out.flush()
+            val response = socket.getInputStream().readBytes().toString(Charsets.UTF_8)
+            val status = response.substringBefore("\r\n").split(" ")[1].toInt()
+            val rawBody = response.substringAfter("\r\n\r\n")
+            // HTTP/1.0: the body is delimited by the connection closing, never chunked.
+            return status to rawBody
+        }
     }
-    fun post(port: Int, path: String, form: String, headers: Map<String, String> = emptyMap()): HttpURLConnection {
-        val conn = URL("http://localhost:$port$path").openConnection() as HttpURLConnection
-        conn.instanceFollowRedirects = false
-        conn.requestMethod = "POST"
-        conn.doOutput = true
-        conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded")
-        for ((k, v) in headers) conn.setRequestProperty(k, v)
-        conn.outputStream.use { it.write(form.toByteArray(Charsets.UTF_8)) }
-        return conn
-    }
-    fun bodyOf(conn: HttpURLConnection): String =
-        (if (conn.responseCode < 400) conn.inputStream else conn.errorStream).bufferedReader().readText()
     val server = createServer(0, api, ManualClock(1735689600000L)) // 2025-01-01T00:00:00Z
     server.start()
     try {
         val port = (server.connectors[0] as org.eclipse.jetty.server.ServerConnector).localPort
-        val crossSite = post(port, "/session/cancel", "id=sess-q1", mapOf("Sec-Fetch-Site" to "cross-site", "Origin" to "https://evil.example"))
-        assertEquals(403, crossSite.responseCode, "Expected 403 for a cross-site POST.")
+        val (crossCode, crossBody) = rawPost(port, "/session/cancel", "id=sess-q1", mapOf("Sec-Fetch-Site" to "cross-site", "Origin" to "https://evil.example"))
+        assertEquals(403, crossCode, "Expected 403 for a cross-site POST; body:\n$crossBody")
         assertEquals(
             "Refusing POST /session/cancel: the browser reported it as a cross-site request (Sec-Fetch-Site: cross-site, Origin: https://evil.example). Management actions must be submitted from this WUI's own pages.",
-            bodyOf(crossSite)
+            crossBody
         )
-        val sameSite = post(port, "/session/delete", "id=sess-c1", mapOf("Sec-Fetch-Site" to "same-site"))
-        assertEquals(403, sameSite.responseCode, "Expected 403 for a same-site (different subdomain) POST.")
-        val maxCross = post(port, "/workers/max", "maxWorkers=2", mapOf("Sec-Fetch-Site" to "cross-site"))
-        assertEquals(403, maxCross.responseCode, "Expected 403 for a cross-site max-workers POST.")
+        val (sameSiteCode, sameSiteBody) = rawPost(port, "/session/delete", "id=sess-c1", mapOf("Sec-Fetch-Site" to "same-site"))
+        assertEquals(403, sameSiteCode, "Expected 403 for a same-site (different subdomain) POST; body:\n$sameSiteBody")
+        val (maxCode, maxBody) = rawPost(port, "/workers/max", "maxWorkers=2", mapOf("Sec-Fetch-Site" to "cross-site"))
+        assertEquals(403, maxCode, "Expected 403 for a cross-site max-workers POST; body:\n$maxBody")
         assertTrue(cancels.isEmpty() && deletes.isEmpty() && maxWorkerCalls.isEmpty(), "Rejected POSTs must not reach the backend.")
 
-        val sameOrigin = post(port, "/session/cancel", "id=sess-q1", mapOf("Sec-Fetch-Site" to "same-origin"))
-        assertEquals(303, sameOrigin.responseCode, "Expected a same-origin POST to proceed.")
+        val (sameOriginCode, sameOriginBody) = rawPost(port, "/session/cancel", "id=sess-q1", mapOf("Sec-Fetch-Site" to "same-origin"))
+        assertEquals(303, sameOriginCode, "Expected a same-origin POST to proceed; body:\n$sameOriginBody")
         assertEquals(listOf("sess-q1" to "Cancelled from the management UI"), cancels.toList())
     } finally {
         server.stop()
