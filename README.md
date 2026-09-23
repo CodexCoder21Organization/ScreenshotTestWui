@@ -25,7 +25,8 @@ and serves:
 - **`/session?id=<id>`** — one session's detail: its state, phase, queue position, started / finished
   instants and duration, the action its state allows (Cancel with an editable reason, or Delete), the
   per-key verdict table (key, verdict, diff pixels / total, max channel delta, golden & actual
-  dimensions), and, for each captured key, inline `actual` / `golden` / `diff` thumbnails. For a queued
+  dimensions), and, for each captured key, inline thumbnails of the images the service produced:
+  `actual` always, `golden` for `MATCH` and `DIFF` keys, and the `diff` heatmap for `DIFF` keys. For a queued
   session, its waiting duration comes from the recent sessions list; if it is no longer listed, the
   duration shows `-` with an explanation that the creation time is unavailable.
 - **`/image?id=<id>&key=<key>&kind=<actual|golden|diff>`** — streams the PNG for one image key,

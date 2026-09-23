@@ -9,7 +9,8 @@ import screenshottest.api.ScreenshotTestApi
 
 /**
  * Renders one session's detail page (`/session?id=<id>`): its status, the per-key verdict table, and
- * — for each captured key — inline `actual` / `golden` / `diff` thumbnails served by [ImageServlet].
+ * — for each captured key — inline `actual` thumbnails plus, where the service produced them, `golden`
+ * (MATCH / DIFF keys) and `diff` (DIFF keys) thumbnails, all served by [ImageServlet].
  *
  * Status comes from [screenshottest.api.ScreenshotTestApi.getSessionStatus]; the verdicts and pixel
  * measurements come from [screenshottest.api.ScreenshotTestApi.getResultsJson], which only exists
@@ -228,19 +229,20 @@ private fun appendResults(sb: StringBuilder, sessionId: String, results: JSONObj
         val r = rows.getJSONObject(i)
         val key = r.optString("key", "")
         val verdict = r.optString("verdict", "")
-        // Which images exist for this key (per the getImageChunk contract):
+        // Which images exist for this key:
         //  - "actual" always exists.
-        //  - "golden"/"diff" exist only for a compare against a submitted golden (MATCH / DIFF);
-        //    they are absent for RECORDED (record mode) and MISSING_GOLDEN keys.
-        val hasGoldenAndDiff = verdict == "MATCH" || verdict == "DIFF"
+        //  - "golden" exists only for a compare against a submitted golden (MATCH / DIFF); it is
+        //    absent for RECORDED (record mode) and MISSING_GOLDEN keys.
+        //  - "diff" exists only for DIFF: the service writes a diff heatmap only when pixels differ,
+        //    so a MATCH key has none and an <img> for it could only fail.
+        val hasGolden = verdict == "MATCH" || verdict == "DIFF"
+        val hasDiff = verdict == "DIFF"
         sb.append("<div class=\"shot-block\">")
         sb.append("<div class=\"shot-key\">${escapeHtml(key)} ${verdictBadgeHtml(verdict)}</div>")
         sb.append("<div class=\"shot-gallery\">")
         sb.append(shot(sessionId, key, "actual", "Actual"))
-        if (hasGoldenAndDiff) {
-            sb.append(shot(sessionId, key, "golden", "Golden"))
-            sb.append(shot(sessionId, key, "diff", "Diff"))
-        }
+        if (hasGolden) sb.append(shot(sessionId, key, "golden", "Golden"))
+        if (hasDiff) sb.append(shot(sessionId, key, "diff", "Diff"))
         sb.append("</div></div>")
     }
 }
