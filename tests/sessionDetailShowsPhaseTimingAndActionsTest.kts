@@ -40,10 +40,11 @@ fun sessionDetailShowsPhaseTimingAndActionsTest() {
         override fun getResultsJson(sessionId: String): String = """{"rendererVersion":"chromium-1228","mode":"compare","results":[]}"""
         override fun getSessionStatus(sessionId: String): String = when (sessionId) {
             "sess-q" -> """{"sessionId":"sess-q","state":"RUNNING","error":null,"rendererVersion":"chromium-1228","queuePosition":2,"startedAt":null,"finishedAt":null}"""
+            "sess-q-absent" -> """{"sessionId":"sess-q-absent","state":"RUNNING","error":null,"rendererVersion":"chromium-1228","queuePosition":0,"startedAt":null,"finishedAt":null}"""
             "sess-c" -> """{"sessionId":"sess-c","state":"COMPLETED","error":null,"rendererVersion":"chromium-1228","queuePosition":null,"startedAt":1735686000000,"finishedAt":1735686090000}"""
             else -> throw IllegalArgumentException("No screenshot session with id '$sessionId'.")
         }
-        override fun listSessions(): String = throw UnsupportedOperationException()
+        override fun listSessions(): String = """[{"sessionId":"sess-q","createdAt":1735689480000}]"""
         override fun deleteSession(sessionId: String) = throw UnsupportedOperationException()
         override fun getWorkerPoolStatus(): String = throw UnsupportedOperationException()
         override fun setMaxWorkers(maxWorkers: Int) = throw UnsupportedOperationException()
@@ -84,6 +85,13 @@ fun sessionDetailShowsPhaseTimingAndActionsTest() {
         )
         assertTrue(queued.contains("""<div class="info-label">Started</div><div class="info-value text-gray">Not started yet</div>"""), "Expected 'Not started yet'.")
         assertTrue(queued.contains("""<div class="info-label">Finished</div><div class="info-value text-gray">Not finished yet</div>"""), "Expected 'Not finished yet'.")
+        assertTrue(
+            queued.contains("""<div class="info-label">Duration</div><div class="info-value"><span title="Duration: waiting for a render worker since the session was created at 2024-12-31 23:58:00 UTC; measured at 2025-01-01 00:00:00 UTC." tabindex="0">waiting 2m 00s</span></div>"""),
+            "A queued session in the recent list must show its waiting duration; page was:\n$queued",
+        )
+        val (absentCode, absent) = get(port, "/session?id=sess-q-absent")
+        assertEquals(200, absentCode)
+        assertTrue(absent.contains("the creation time is unavailable"), "A queued session outside the recent list needs an explanatory tooltip; page was:\n$absent")
         val cancelPanel = """<div class="panel" id="session-actions"><h2>Cancel this session</h2><form method="post" action="/session/cancel" class="form-row"><input type="hidden" name="id" value="sess-q"><input type="hidden" name="returnTo" value="session"><label for="cancel-reason">Reason</label><input id="cancel-reason" class="text-input" type="text" name="reason" size="48" value="Cancelled from the management UI"><button type="submit" class="btn btn-danger">Cancel session</button></form>"""
         assertTrue(queued.contains(cancelPanel), "Expected the Cancel panel:\n$cancelPanel\npage was:\n$queued")
         assertFalse(queued.contains("/session/delete"), "A RUNNING session must not offer Delete.")

@@ -39,7 +39,7 @@ fun setMaxWorkersValidationTest() {
           {"sessionId":"sess-f1","label":"cancelled before start","mode":"compare","state":"FAILED","createdAt":1735682300000,"rendererVersion":"chromium-1228","queuePosition":null,"startedAt":null,"finishedAt":1735682400000}
         ]
     """.trimIndent()
-    val poolJson = """{"maxWorkers":3,"activeWorkers":1,"queuedSessions":2,"running":["sess-r1"],"queued":["sess-q1","sess-q2"]}"""
+    var poolSize = 3
     val cancels = java.util.Collections.synchronizedList(mutableListOf<Pair<String, String>>())
     val deletes = java.util.Collections.synchronizedList(mutableListOf<String>())
     val maxWorkerCalls = java.util.Collections.synchronizedList(mutableListOf<Int>())
@@ -60,10 +60,11 @@ fun setMaxWorkersValidationTest() {
             if (sessionId == "sess-r1") throw IllegalStateException("Session 'sess-r1' is RUNNING; cancel it before deleting it.")
             deletes.add(sessionId)
         }
-        override fun getWorkerPoolStatus(): String = poolJson
+        override fun getWorkerPoolStatus(): String = """{"maxWorkers":$poolSize,"activeWorkers":1,"queuedSessions":2,"running":["sess-r1"],"queued":["sess-q1","sess-q2"]}"""
         override fun setMaxWorkers(maxWorkers: Int) {
             require(maxWorkers in 1..16) { "maxWorkers must be between 1 and 16, but was $maxWorkers." }
             maxWorkerCalls.add(maxWorkers)
+            poolSize = maxWorkers
         }
         override fun cancelSession(sessionId: String, reason: String) {
             when (sessionId) {
@@ -97,25 +98,28 @@ fun setMaxWorkersValidationTest() {
     server.start()
     try {
         val port = (server.connectors[0] as org.eclipse.jetty.server.ServerConnector).localPort
-        val ok = post(port, "/workers/max", "maxWorkers=6")
-        assertEquals(303, ok.responseCode, "Expected 303 after setting max workers; body:\n${bodyOf(ok)}")
-        assertEquals("/workers?notice=maxWorkersSet&noticeId=6", ok.getHeaderField("Location"))
-        assertEquals(listOf(6), maxWorkerCalls.toList())
-        val (code, html) = get(port, "/workers?notice=maxWorkersSet&noticeId=6")
-        assertEquals(200, code)
-        assertTrue(
-            html.contains("""<span class="banner-text">Set the render worker pool to at most 6 concurrent sessions.</span>"""),
-            "Expected the composed max-workers notice; page was:\n$html"
-        )
+        for (boundary in listOf(1, 16)) {
+            val ok = post(port, "/workers/max", "maxWorkers=$boundary")
+            assertEquals(303, ok.responseCode, "Expected 303 after setting max workers to $boundary; body:\n${bodyOf(ok)}")
+            assertEquals("/workers?notice=maxWorkersSet&noticeId=$boundary", ok.getHeaderField("Location"))
+            val (code, html) = get(port, ok.getHeaderField("Location"))
+            assertEquals(200, code)
+            assertTrue(html.contains("""<span class="banner-text">Pool size is now $boundary.</span>"""), "Expected live pool notice; page was:\n$html")
+            assertTrue(html.contains("""name="maxWorkers" size="4" value="$boundary">"""), "The form must show the new pool size; page was:\n$html")
+            assertTrue(html.contains("""<div class="info-label">Max workers"""), "The pool summary must be present; page was:\n$html")
+        }
 
-        val outOfRange = post(port, "/workers/max", "maxWorkers=40")
+        val outOfRange = post(port, "/workers/max", "maxWorkers=17")
         assertEquals(400, outOfRange.responseCode, "Expected 400 when the service rejects the value.")
         val outOfRangeHtml = bodyOf(outOfRange)
         assertTrue(
-            outOfRangeHtml.contains("""<div class="banner banner-error" role="alert"><span class="banner-label">Error</span><span class="banner-text">The screenshot service rejected max workers 40: maxWorkers must be between 1 and 16, but was 40.</span>"""),
+            outOfRangeHtml.contains("""<div class="banner banner-error" role="alert"><span class="banner-label">Error</span><span class="banner-text">The screenshot service rejected max workers 17: maxWorkers must be between 1 and 16, but was 17.</span>"""),
             "Expected the service's full validation message in an error banner; page was:\n$outOfRangeHtml"
         )
-        assertTrue(outOfRangeHtml.contains("""name="maxWorkers" size="4" value="40">"""), "Expected the rejected input kept in the field for correction.")
+        assertTrue(outOfRangeHtml.contains("""name="maxWorkers" size="4" value="17">"""), "Expected the rejected input kept in the field for correction.")
+        val zero = post(port, "/workers/max", "maxWorkers=0")
+        assertEquals(400, zero.responseCode)
+        assertTrue(bodyOf(zero).contains("""<span class="banner-text">The screenshot service rejected max workers 0: maxWorkers must be between 1 and 16, but was 0.</span>"""))
         assertFalse(outOfRangeHtml.contains("http-equiv=\"refresh\""), "An error page must not auto-refresh the error away.")
 
         val nonNumeric = post(port, "/workers/max", "maxWorkers=four")
@@ -134,7 +138,8 @@ fun setMaxWorkersValidationTest() {
             "Expected the descriptive missing-field message."
         )
 
-        assertEquals(listOf(6), maxWorkerCalls.toList(), "Only the valid value may reach the backend.")
+        assertEquals(listOf(1, 16), maxWorkerCalls.toList(), "Only the valid values may change the pool.")
+        assertEquals(16, poolSize, "Rejected values must leave the pool unchanged.")
     } finally {
         server.stop()
     }

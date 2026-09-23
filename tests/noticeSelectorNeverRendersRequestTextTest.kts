@@ -112,11 +112,23 @@ fun noticeSelectorNeverRendersRequestTextTest() {
         assertEquals(200, code3)
         assertFalse(badCount.contains("class=\"banner "), "A non-numeric worker count must not produce a banner.")
 
-        val (code4, valid) = get(port, "/session?id=sess-q1&notice=cancelled&noticeId=sess-q1")
+        val (codeMismatch, mismatchedPool) = get(port, "/workers?notice=maxWorkersSet&noticeId=16")
+        assertEquals(200, codeMismatch)
+        assertFalse(mismatchedPool.contains("class=\"banner "), "A requested size different from the live pool must not produce a banner.")
+
+        val (codeQueued, queued) = get(port, "/session?id=sess-q1&notice=cancelled&noticeId=sess-q1")
+        assertEquals(200, codeQueued)
+        assertFalse(queued.contains("class=\"banner "), "A still-queued session must not be described as cancelled.")
+
+        val (codeListed, listed) = get(port, "/?notice=deleted&noticeId=sess-c1")
+        assertEquals(200, codeListed)
+        assertFalse(listed.contains("class=\"banner "), "A listed session must not be described as deleted.")
+
+        val (code4, valid) = get(port, "/workers?notice=maxWorkersSet&noticeId=3")
         assertEquals(200, code4)
         assertTrue(
-            valid.contains("""<span class="banner-text">Cancelled session sess-q1. It is now FAILED with the cancellation reason recorded as its error.</span>"""),
-            "Expected a well-formed notice to render on the session page; page was:\n$valid"
+            valid.contains("""<span class="banner-text">Pool size is now 3.</span>"""),
+            "Expected a notice backed by the live pool status; page was:\n$valid"
         )
     } finally {
         server.stop()
