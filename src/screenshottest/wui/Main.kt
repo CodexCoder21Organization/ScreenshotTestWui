@@ -45,6 +45,10 @@ fun createServer(port: Int, clock: Clock = SystemClock(), apiProvider: () -> Scr
     context.addServlet(ServletHolder(SessionListServlet()), "/sessions")
     context.addServlet(ServletHolder(SessionDetailServlet()), "/session")
     context.addServlet(ServletHolder(ImageServlet()), "/image")
+    context.addServlet(ServletHolder(WorkersServlet()), "/workers")
+    context.addServlet(ServletHolder(CancelSessionServlet()), "/session/cancel")
+    context.addServlet(ServletHolder(DeleteSessionServlet()), "/session/delete")
+    context.addServlet(ServletHolder(SetMaxWorkersServlet()), "/workers/max")
 
     server.handler = context
     return server

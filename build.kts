@@ -38,7 +38,7 @@ val dependencies = resolveDependencies2(
     MavenPrebuilt2("community.kotlin.rpc:protocol-api:0.0.2"),
     MavenPrebuilt2("community.kotlin.rpc:protocol-impl:0.0.11"),
     // ScreenshotTest API — the url://screenshottest/ contract this WUI renders.
-    MavenPrebuilt2("screenshottest.api:screenshottest-api:0.0.1"),
+    MavenPrebuilt2("screenshottest.api:screenshottest-api:0.0.2"),
     // JSON
     MavenPrebuilt2("org.json:json:20250517"),
     // Okio
