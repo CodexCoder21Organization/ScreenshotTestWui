@@ -13,9 +13,9 @@ class PageResult(val status: Int, val html: String)
  * Renders the session gallery landing page (`/`): every render session the service knows about,
  * newest first, as reported by [screenshottest.api.ScreenshotTestApi.listSessions].
  *
- * Columns: session id (links to the detail page), label, mode, state, phase (Queued #n / Rendering /
- * Completed / Failed), created, duration, renderer, and the row's actions (Cancel while RUNNING,
- * Delete once terminal).
+ * Columns: session id (links to the detail page), label, mode, state (plus the phase — Queued #n or
+ * Rendering — while RUNNING), created, duration, and the row's action (Cancel while RUNNING, Delete
+ * once terminal). The renderer identity is the session link's tooltip and a card on the detail page.
  */
 class SessionListServlet : HttpServlet() {
     override fun doGet(req: HttpServletRequest, resp: HttpServletResponse) {
@@ -54,13 +54,13 @@ fun renderSessionListPage(api: ScreenshotTestApi, nowMs: Long, banner: Banner?):
         if (sessions.length() == 0) {
             append("<div class=\"empty-state\">No render sessions yet. Submit a WUI to url://screenshottest/ to capture golden screenshots.</div>")
         } else {
-            append("<table>")
+            append("<div class=\"table-scroll\"><table>")
             append("<thead><tr>")
-            append("<th>Session</th><th>Label</th><th>Mode</th><th>State</th>")
-            append("<th>Phase<span class=\"info-icon\" tabindex=\"0\" title=\"Queued #n: waiting for a free render worker (n = place in the service queue). Rendering: a worker is capturing it now. Completed / Failed: finished; a cancelled session is Failed.\">i</span></th>")
+            append("<th>Session</th><th>Label</th><th>Mode</th>")
+            append("<th>State<span class=\"info-icon\" tabindex=\"0\" title=\"A RUNNING session also shows its phase: Queued #n (waiting for a free render worker, n = place in the service queue) or Rendering (a worker is capturing it now). A cancelled session is FAILED.\">i</span></th>")
             append("<th>Created</th>")
             append("<th>Duration<span class=\"info-icon\" tabindex=\"0\" title=\"Finished sessions: how long the render took (finished minus started). Rendering sessions: how long they have been running. Queued sessions: how long they have waited since creation.\">i</span></th>")
-            append("<th>Renderer</th><th>Actions</th>")
+            append("<th>Actions</th>")
             append("</tr></thead><tbody>")
             for (i in 0 until sessions.length()) {
                 val s = sessions.getJSONObject(i)
@@ -75,18 +75,18 @@ fun renderSessionListPage(api: ScreenshotTestApi, nowMs: Long, banner: Banner?):
                 val finishedAt = s.optNullableEpochMs("finishedAt")
                 val phase = sessionPhase(state, queuePosition)
                 append("<tr class=\"${stateRowCssClass(state)}\">")
-                append("<td class=\"nowrap mono\"><a href=\"/session?id=${urlEncode(sessionId)}\">${escapeHtml(sessionId)}</a></td>")
+                append("<td class=\"nowrap mono\"><a href=\"/session?id=${urlEncode(sessionId)}\" title=\"Rendered by ${escapeHtml(renderer)}\">${escapeHtml(sessionId)}</a></td>")
                 append("<td>${escapeHtml(label)}</td>")
                 append("<td>${modeBadgeHtml(mode)}</td>")
-                append("<td>${stateBadgeHtml(state)}</td>")
-                append("<td class=\"nowrap\">${phaseBadgeHtml(phase)}</td>")
+                // The phase only adds information while RUNNING (queued vs rendering); for every other
+                // state it would repeat the state badge.
+                append("<td class=\"nowrap\">${stateBadgeHtml(state)}${if (state == "RUNNING") " " + phaseBadgeHtml(phase) else ""}</td>")
                 append("<td class=\"date-cell nowrap\" data-timestamp=\"$createdAt\"></td>")
                 append("<td class=\"nowrap\">${durationCellHtml(createdAt, startedAt, finishedAt, queuePosition != null, nowMs)}</td>")
-                append("<td class=\"mono\" style=\"font-size:12px;color:var(--text-secondary);\">${escapeHtml(renderer)}</td>")
                 append("<td class=\"actions-cell\">${sessionActionsHtml(sessionId, state, ReturnTarget.LIST)}</td>")
                 append("</tr>")
             }
-            append("</tbody></table>")
+            append("</tbody></table></div>")
         }
         append("</div>")
         append(pageFooter(nowMs))

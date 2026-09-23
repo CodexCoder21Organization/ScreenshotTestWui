@@ -243,6 +243,9 @@ form.inline-action { display: inline; margin: 0; }
     cursor: help;
     font-style: normal;
 }
+.table-scroll { overflow-x: auto; margin-bottom: 16px; }
+.table-scroll table { margin-bottom: 0; }
+.table-scroll th, .table-scroll td { padding: 8px 12px; }
 .refresh-note { font-size: 12px; color: var(--text-secondary); margin-bottom: 16px; }
 .badge-queued { background: #2d2207; color: var(--yellow); }
 .date-cell .date-relative { font-weight: 600; }

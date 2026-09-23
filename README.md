@@ -4,19 +4,52 @@ The session gallery and diff viewer for the **ScreenshotTest** golden-screenshot
 ([`url://screenshottest/`](https://github.com/CodexCoder21Organization/ScreenshotTestServerService)) —
 part of the [ScreenshotTest workstream](https://github.com/CodexCoder21Organization/PlanRepository/blob/main/workstreams/ScreenshotTest.md).
 
-It is a deliberately minimal, read-only web UI (Jetty 11, `org.json`, dark GitHub theme) that connects
-to `url://screenshottest/` as a typed
-[`ScreenshotTestApi`](https://github.com/CodexCoder21Organization/ScreenshotTestApi) proxy and renders:
+It is a small management web UI (Jetty 11, `org.json`, dark GitHub theme) that connects to
+`url://screenshottest/` as a typed
+[`ScreenshotTestApi`](https://github.com/CodexCoder21Organization/ScreenshotTestApi) proxy
+(`screenshottest.api:screenshottest-api:0.0.2`, the version that added the bounded render worker pool)
+and serves:
 
 - **`/`** — the sessions list: every render session newest-first (id, label, mode, state, created,
-  renderer).
-- **`/session?id=<id>`** — one session's detail: its status, the per-key verdict table (key, verdict,
-  diff pixels / total, max channel delta, golden & actual dimensions), and, for each captured key,
-  inline `actual` / `golden` / `diff` thumbnails.
+  **duration**) with a per-row action; the renderer identity is the id link's tooltip. A `RUNNING`
+  session also shows its **phase**, derived from its queue position: **Queued #n** (waiting for a
+  free render worker, n = place in the queue) or **Rendering**. A cancelled session is `FAILED`. The
+  duration is finished − started for finished sessions, a live "running for" for rendering ones, and
+  "waiting" since creation for queued ones — measured against the server's clock, with the absolute
+  UTC instants in the cell's tooltip.
+- **`/workers`** — the render worker pool: the maximum number of sessions rendered at once, how many
+  workers are busy, how many sessions wait; a table of the sessions rendering now (started, running
+  for) and of the queue in service order (position, created, waiting for); a form to change the pool
+  size; and a **Cancel** action per session. It reloads itself every 15 seconds; `/workers?refresh=0`
+  is the same page without the reload.
+- **`/session?id=<id>`** — one session's detail: its state, phase, queue position, started / finished
+  instants and duration, the action its state allows (Cancel with an editable reason, or Delete), the
+  per-key verdict table (key, verdict, diff pixels / total, max channel delta, golden & actual
+  dimensions), and, for each captured key, inline `actual` / `golden` / `diff` thumbnails.
 - **`/image?id=<id>&key=<key>&kind=<actual|golden|diff>`** — streams the PNG for one image key,
   pulled from the service in bounded chunks and written straight to the response so the WUI never
   buffers a whole image in its `-Xmx128m` heap.
 - **`/health`** — a backend-free liveness probe returning `200 OK`.
+
+### Management actions
+
+The actions are plain HTML form POSTs, so they work without JavaScript:
+
+| Action | Form | Allowed for | Service call |
+|---|---|---|---|
+| Cancel | `POST /session/cancel` — `id`, `reason` (defaults to "Cancelled from the management UI"), `returnTo` | `RUNNING` sessions, queued or rendering | `cancelSession(id, reason)` — the session becomes `FAILED` with "Cancelled before rendering started: …" or "Cancelled while rendering: …" |
+| Delete | `POST /session/delete` — `id`, `returnTo` | `COMPLETED` / `FAILED` sessions | `deleteSession(id)` |
+| Set pool size | `POST /workers/max` — `maxWorkers` | — | `setMaxWorkers(n)`; the service enforces the allowed range |
+
+On success the WUI answers `303 See Other` back to the page named by `returnTo` (`list`, `workers`, or
+`session`; deleting from a session's own page returns to the list), which shows a dismissible
+confirmation banner. The redirect carries only an enumerated `notice` code and the session id — the
+page composes the words itself, so a crafted link cannot make it display arbitrary text. On failure
+the originating page is rendered directly with an error banner holding the service's full message:
+`400` for a missing or malformed field or a value the service rejects, `404` for an unknown session,
+`409` for a session whose state does not allow the action, and `502` for any other backend failure.
+A POST that the browser labels as coming from another site (`Sec-Fetch-Site: cross-site` or
+`same-site`) is refused with `403`.
 
 It is also the **first WUI to dogfood the ScreenshotTest service on itself**: its own pages are
 captured as golden screenshots against the live `url://screenshottest/` renderer and committed under
@@ -90,7 +123,9 @@ scripts/test.bash --test tests/imageEndpointStreamsExactBytesTest.kts   # a sing
 
 The tests are end-to-end and self-contained: each starts a real Jetty server via `createServer`
 against an inline fake `ScreenshotTestApi` (no mocks) and exercises the real HTTP surface — the
-sessions list, the verdict table and thumbnail gallery, the chunk-streamed `/image` endpoint
+sessions list with its phases, durations and actions, the worker pool page, the cancel / delete /
+set-max-workers actions (redirects, notices, and every error status with the service's message), the
+verdict table and thumbnail gallery, the chunk-streamed `/image` endpoint
 (including byte-for-byte streaming of a multi-MiB image and descriptive `400`/`404` errors), the
 frozen-clock time-stability property, and `/health`.
 
@@ -99,10 +134,11 @@ frozen-clock time-stability property, and `/health`.
 `tests/goldenScreenshots.kts` renders this WUI's own pages through the pinned
 `url://screenshottest/` renderer and compares them against the goldens committed under
 [`screenshots/`](screenshots/). It launches `ScreenshotFixtureServer` — a deterministic, frozen-clock
-build of this WUI serving a fixed set of sessions (one compare session with a MATCH and a DIFF key,
-one record session, one failed session) with small in-memory PNGs — on a hosted worker, captures the
-sessions list and a session detail page (plus the results-table crop), and asserts every verdict is
-`MATCH`.
+build of this WUI serving a fixed set of sessions (two rendering and two queued on a full two-worker pool, one compare session
+with a MATCH and a DIFF key, one record session, one failed session) with small in-memory PNGs — on a
+hosted worker, captures the sessions list, a completed session's detail page (plus the results-table
+crop), a queued session's detail page, and the worker pool page (`/workers?refresh=0`), and asserts
+every verdict is `MATCH`.
 
 - **Compare (CI default):**
   ```bash

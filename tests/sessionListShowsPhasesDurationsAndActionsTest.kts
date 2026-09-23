@@ -25,8 +25,8 @@ import java.net.URL
 import screenshottest.api.ScreenshotTestApi
 
 /**
- * The sessions list derives each session's phase from state + queuePosition (Queued #n / Rendering /
- * Completed / Failed), shows its duration measured against the injected clock (finished - started,
+ * The sessions list shows, next to a RUNNING session's state, its phase derived from queuePosition
+ * (Queued #n / Rendering), shows its duration measured against the injected clock (finished - started,
  * "running for", or "waiting" for queued sessions) with the absolute instants in a tooltip, and
  * offers Cancel only for RUNNING sessions and Delete only for terminal ones.
  */
@@ -82,7 +82,7 @@ fun sessionListShowsPhasesDurationsAndActionsTest() {
         assertEquals(200, code, "Expected HTTP 200 for the sessions list; got $code with body:\n$html")
 
         val cancelQ2 = """<form class="inline-action" method="post" action="/session/cancel"><input type="hidden" name="id" value="sess-q2"><input type="hidden" name="reason" value="Cancelled from the management UI"><input type="hidden" name="returnTo" value="list"><button type="submit" class="btn btn-danger" title="Cancel session sess-q2: it stops (or never starts) rendering and is marked FAILED with the reason &quot;Cancelled from the management UI&quot;.">Cancel</button></form>"""
-        val queuedRow = """<tr class="row-status-provisioning"><td class="nowrap mono"><a href="/session?id=sess-q2">sess-q2</a></td><td>queued second</td><td><span class="badge badge-provisioning">compare</span></td><td><span class="badge badge-running">RUNNING</span></td><td class="nowrap"><span class="badge badge-queued" title="Waiting for a free render worker: 2nd in the service&#39;s queue (1 session ahead of it)." tabindex="0">Queued #2</span></td><td class="date-cell nowrap" data-timestamp="1735689540000"></td><td class="nowrap"><span title="Duration: waiting for a render worker since the session was created at 2024-12-31 23:59:00 UTC; measured at 2025-01-01 00:00:00 UTC." tabindex="0">waiting 1m 00s</span></td><td class="mono" style="font-size:12px;color:var(--text-secondary);">chromium-1228</td><td class="actions-cell">$cancelQ2</td></tr>"""
+        val queuedRow = """<tr class="row-status-provisioning"><td class="nowrap mono"><a href="/session?id=sess-q2" title="Rendered by chromium-1228">sess-q2</a></td><td>queued second</td><td><span class="badge badge-provisioning">compare</span></td><td class="nowrap"><span class="badge badge-running">RUNNING</span> <span class="badge badge-queued" title="Waiting for a free render worker: 2nd in the service&#39;s queue (1 session ahead of it)." tabindex="0">Queued #2</span></td><td class="date-cell nowrap" data-timestamp="1735689540000"></td><td class="nowrap"><span title="Duration: waiting for a render worker since the session was created at 2024-12-31 23:59:00 UTC; measured at 2025-01-01 00:00:00 UTC." tabindex="0">waiting 1m 00s</span></td><td class="actions-cell">$cancelQ2</td></tr>"""
         assertTrue(html.contains(queuedRow), "Expected the full queued-session row:\n$queuedRow\npage was:\n$html")
 
         assertTrue(
@@ -92,7 +92,7 @@ fun sessionListShowsPhasesDurationsAndActionsTest() {
 
         // Rendering: phase badge, live "running for" against the injected clock, Cancel action.
         assertTrue(
-            html.contains("""<td class="nowrap"><span class="badge badge-running" title="A render worker is capturing this session&#39;s screenshots now." tabindex="0">Rendering</span></td>"""),
+            html.contains("""<td class="nowrap"><span class="badge badge-running">RUNNING</span> <span class="badge badge-running" title="A render worker is capturing this session&#39;s screenshots now." tabindex="0">Rendering</span></td>"""),
             "Expected sess-r1 to show the Rendering phase; page was:\n$html"
         )
         assertTrue(
@@ -102,13 +102,14 @@ fun sessionListShowsPhasesDurationsAndActionsTest() {
         assertTrue(html.contains("""<input type="hidden" name="id" value="sess-r1">"""), "Expected a Cancel form for the rendering session sess-r1.")
 
         // Completed: duration = finished - started, and a Delete action (no Cancel).
-        val completedRow = """<tr class="row-status-completed"><td class="nowrap mono"><a href="/session?id=sess-c1">sess-c1</a></td><td>completed one</td><td><span class="badge badge-provisioning">compare</span></td><td><span class="badge badge-completed">COMPLETED</span></td><td class="nowrap"><span class="badge badge-completed" title="The render finished; per-key verdicts are available." tabindex="0">Completed</span></td><td class="date-cell nowrap" data-timestamp="1735685900000"></td><td class="nowrap"><span title="Duration: rendered for 1m 30s, from 2024-12-31 23:00:00 UTC to 2024-12-31 23:01:30 UTC." tabindex="0">1m 30s</span></td><td class="mono" style="font-size:12px;color:var(--text-secondary);">chromium-1228</td><td class="actions-cell"><form class="inline-action" method="post" action="/session/delete"><input type="hidden" name="id" value="sess-c1"><input type="hidden" name="returnTo" value="list"><button type="submit" class="btn" title="Delete session sess-c1 and its stored screenshots from the service.">Delete</button></form></td></tr>"""
+        val completedRow = """<tr class="row-status-completed"><td class="nowrap mono"><a href="/session?id=sess-c1" title="Rendered by chromium-1228">sess-c1</a></td><td>completed one</td><td><span class="badge badge-provisioning">compare</span></td><td class="nowrap"><span class="badge badge-completed">COMPLETED</span></td><td class="date-cell nowrap" data-timestamp="1735685900000"></td><td class="nowrap"><span title="Duration: rendered for 1m 30s, from 2024-12-31 23:00:00 UTC to 2024-12-31 23:01:30 UTC." tabindex="0">1m 30s</span></td><td class="actions-cell"><form class="inline-action" method="post" action="/session/delete"><input type="hidden" name="id" value="sess-c1"><input type="hidden" name="returnTo" value="list"><button type="submit" class="btn" title="Delete session sess-c1 and its stored screenshots from the service.">Delete</button></form></td></tr>"""
         assertTrue(html.contains(completedRow), "Expected the full completed-session row:\n$completedRow\npage was:\n$html")
 
-        // Failed without ever starting: phase Failed, "-" duration explained, Delete action.
+        // Failed without ever starting: only the FAILED state (a phase would repeat it), "-" duration
+        // explained, Delete action.
         assertTrue(
-            html.contains("""<span class="badge badge-failed" title="The session ended without results (it failed or was cancelled); see its error." tabindex="0">Failed</span>"""),
-            "Expected sess-f1 to show the Failed phase; page was:\n$html"
+            html.contains("""<td class="nowrap"><span class="badge badge-failed">FAILED</span></td>"""),
+            "Expected sess-f1 to show just the FAILED state badge; page was:\n$html"
         )
         assertTrue(
             html.contains("""<span title="Duration: this session ended at 2024-12-31 22:00:00 UTC without ever starting to render." tabindex="0">-</span>"""),
