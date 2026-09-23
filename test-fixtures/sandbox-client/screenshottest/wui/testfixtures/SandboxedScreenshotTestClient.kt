@@ -2,7 +2,6 @@ package screenshottest.wui.testfixtures
 
 import foundation.url.sjvm.intrinsics.ServiceBridge
 import screenshottest.api.ScreenshotTestApi
-import java.util.Base64
 
 /**
  * Test-only client bytecode that a test's in-process `url://` provider serves to the WUI's SJVM
@@ -10,9 +9,9 @@ import java.util.Base64
  *
  * [getImageChunk] mirrors the production `ScreenshotTestServiceClientImpl`
  * (https://github.com/CodexCoder21Organization/ScreenshotTestServerService/blob/main/src-client/screenshottest/server/ScreenshotTestServiceClientImpl.kt):
- * it issues a `ServiceBridge.rpc("getImageChunk", ...)` and base64-decodes the `data` string inside
- * the sandbox. That interpreted decode is what several concurrent `/image` requests run in parallel
- * when a session page loads its thumbnails, which is the load the WUI must sustain.
+ * it issues a `ServiceBridge.rpc("getImageChunk", ...)` with `encoding = "bytes"` and returns the
+ * natively marshaled `ByteArray`. Several of these run in parallel when a session page loads its
+ * thumbnails, which is the load the WUI must sustain.
  *
  * Only the calls the image endpoint makes are implemented; the rest throw.
  */
@@ -24,9 +23,9 @@ class SandboxedScreenshotTestClient : ScreenshotTestApi {
             "kind" to kind,
             "offset" to offset,
             "length" to length,
+            "encoding" to "bytes",
         ))
-        val data = result["data"] as? String ?: return null
-        return Base64.getDecoder().decode(data)
+        return result["data"] as? ByteArray
     }
 
     override fun getRendererVersion(): String = unsupported("getRendererVersion")

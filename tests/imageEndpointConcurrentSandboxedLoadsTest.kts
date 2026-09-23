@@ -88,7 +88,6 @@ import screenshottest.api.ScreenshotTestApi
 import java.net.HttpURLConnection
 import java.net.URL
 import java.security.MessageDigest
-import java.util.Base64
 import java.util.concurrent.Callable
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
@@ -101,19 +100,20 @@ import kotlin.test.assertTrue
  * sandbox proxy for `url://screenshottest/`, and ContainerNursery's HTTPS proxy answers `503 Service
  * Unavailable: Read timed out` for any request the WUI has not started answering within 30 seconds.
  *
- * With SJVM 0.0.38 on the WUI's classpath, fifteen concurrent sandboxed `getImageChunk` calls of
- * 64–140 KB images each took 40–75 seconds (sequentially each takes well under a second): every
- * class lookup inside the interpreted client took a suspending class-loader mutex, so concurrent
- * invocations queued behind one another
- * (fixed upstream in https://github.com/CodexCoder21Organization/sandboxjvm/pull/93). The live page
+ * The live page
  * https://screenshottest.nursery.wasmserver.com/session?id=sess-0e7a76ce-d8cc-423f-a3a5-f1664b893546
- * showed exactly that: most thumbnails came back 503 after 30 or 60 seconds.
+ * showed most thumbnails as 503 after 30 or 60 seconds: fifteen concurrent sandboxed `getImageChunk`
+ * calls of 64–140 KB images each took 40–75 seconds. Two defects compounded. SJVM releases before
+ * 0.0.47 take a suspending class-loader mutex on every class lookup, so concurrent interpreted calls
+ * queue behind one another (https://github.com/CodexCoder21Organization/sandboxjvm/pull/93), and the
+ * served client base64-decoded every slice in the interpreter (now served as raw bytes,
+ * https://github.com/CodexCoder21Organization/ScreenshotTestServerService/pull/14).
  *
  * This test serves the thumbnails through the same path: a real in-process `url://` provider node
- * serves sandbox client bytecode that base64-decodes each slice like the production client, the WUI
- * reaches it through `UrlResolver.openSandboxedConnection`, and fifteen HTTP clients request every
- * thumbnail concurrently. Every request must return the exact image bytes, and each must complete
- * within the 30-second window ContainerNursery allows before it gives up on the WUI.
+ * serves sandbox client bytecode that fetches each slice like the production client, the WUI reaches
+ * it through `UrlResolver.openSandboxedConnection`, and fifteen HTTP clients request every thumbnail
+ * concurrently. Every request must return the exact image bytes, and each must complete within the
+ * 30-second window ContainerNursery allows before it gives up on the WUI.
  */
 @build.kotlin.annotations.Timeout(600)
 fun imageEndpointConcurrentSandboxedLoadsTest() {
@@ -140,15 +140,16 @@ fun imageEndpointConcurrentSandboxedLoadsTest() {
         override suspend fun handleRequest(path: String, params: Map<String, Any?>, metadata: Map<String, String>): Any? {
             require(path == "getImageChunk") { "Unexpected RPC '$path' with params $params." }
             val keyIndex = keys.indexOf(params["key"].toString())
-            require(params["sessionId"] == sessionId && params["kind"] == "actual" && keyIndex >= 0) {
+            require(params["sessionId"] == sessionId && params["kind"] == "actual" && keyIndex >= 0 &&
+                params["encoding"] == "bytes"
+            ) {
                 "Unexpected getImageChunk params $params."
             }
             val image = images[keyIndex]
             val offset = (params["offset"] as Number).toInt()
             val length = (params["length"] as Number).toInt()
             if (offset >= image.size) return mapOf("data" to null)
-            val slice = image.copyOfRange(offset, minOf(image.size, offset + length))
-            return mapOf("data" to Base64.getEncoder().encodeToString(slice))
+            return mapOf("data" to image.copyOfRange(offset, minOf(image.size, offset + length)))
         }
 
         override fun onShutdown() = Unit
