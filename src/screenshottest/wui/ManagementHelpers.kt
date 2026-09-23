@@ -180,7 +180,7 @@ fun noticeBanner(
 ): Banner? {
     return when (code) {
         NOTICE_CANCELLED -> noticeId?.takeIf { NOTICE_ID_PATTERN.matches(it) }
-            ?.takeIf { isListed == true && sessionStatus?.optString("sessionId") == it && sessionStatus?.optString("state") == "FAILED" }
+            ?.takeIf { id -> isListed == true && sessionStatus?.let { it.optString("sessionId") == id && it.optString("state") == "FAILED" } == true }
             ?.let { id ->
                 val error = sessionStatus?.optString("error", "") ?: ""
                 if (error.startsWith("Cancelled ")) Banner(Banner.Kind.NOTICE, "Session $id is FAILED: $error") else null

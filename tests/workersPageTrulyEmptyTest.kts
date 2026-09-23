@@ -49,6 +49,8 @@ fun workersPageTrulyEmptyTest() {
         assertEquals(200, conn.responseCode)
         assertTrue(html.contains("No session is rendering right now."), "Expected the empty running state: $html")
         assertTrue(html.contains("No session is waiting for a worker."), "Expected the empty queue state: $html")
+        assertTrue(html.contains("""<div class="info-value">0 / 4</div>"""), "Expected zero active workers out of four: $html")
+        assertTrue(html.contains("""<div class="info-value">0</div>"""), "Expected zero queued sessions: $html")
         assertFalse(html.contains("id=\"running-table\""))
         assertFalse(html.contains("id=\"queued-table\""))
     } finally {

@@ -49,6 +49,8 @@ fun workersPageQueuedOnlyTest() {
         assertEquals(200, conn.responseCode)
         assertTrue(html.contains("No session is rendering right now."), "Expected no running rows: $html")
         assertTrue(html.contains("id=\"queued-table\""), "Expected a queue table: $html")
+        assertTrue(html.contains("""<div class="info-value">0 / 4</div>"""), "Expected no active workers: $html")
+        assertTrue(html.contains("""<div class="info-value">2</div>"""), "Expected two queued sessions: $html")
         assertTrue(html.indexOf("/session?id=sess-q1") < html.indexOf("/session?id=sess-q2"), "Expected service queue order: $html")
         assertTrue(html.contains("waiting 2m 00s"), "Expected deterministic waiting duration: $html")
     } finally {

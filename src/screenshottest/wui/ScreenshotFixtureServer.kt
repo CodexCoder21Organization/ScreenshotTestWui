@@ -373,7 +373,6 @@ fun main() {
     System.setProperty("java.awt.headless", "true")
     val requestedPort = System.getenv("PORT")?.toIntOrNull() ?: 8080
     val clock: Clock = ManualClock(FIXED_NOW_MS)
-    println("Starting ScreenshotTest WUI screenshot fixture on port $requestedPort (frozen clock @ $FIXED_NOW_MS)...")
     val server = createServer(requestedPort, buildFixtureApi(), clock)
     server.start()
     // The screenshottest runner launches this main with PORT=0 and waits for exactly one endpoint
@@ -383,6 +382,7 @@ fun main() {
     println("SCREENSHOTTEST_ENDPOINT {\"host\":\"127.0.0.1\",\"port\":$boundPort}")
     println("SCREENSHOTTEST_ENDPOINTS_COMPLETE")
     System.out.flush()
+    println("Starting ScreenshotTest WUI screenshot fixture on port $requestedPort (frozen clock @ $FIXED_NOW_MS)...")
     println("Fixture WUI running at http://127.0.0.1:$boundPort/")
     server.join()
 }

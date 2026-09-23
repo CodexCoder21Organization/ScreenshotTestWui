@@ -37,9 +37,9 @@ fun sessionListShowsPhasesDurationsAndActionsTest() {
           {"sessionId":"sess-q1","label":"queued first","mode":"record","state":"RUNNING","createdAt":1735689480000,"rendererVersion":"chromium-1228","queuePosition":0,"startedAt":null,"finishedAt":null},
           {"sessionId":"sess-r1","label":"rendering one","mode":"compare","state":"RUNNING","createdAt":1735689000000,"rendererVersion":"chromium-1228","queuePosition":null,"startedAt":1735689475000,"finishedAt":null},
           {"sessionId":"sess-c1","label":"completed one","mode":"compare","state":"COMPLETED","createdAt":1735685900000,"rendererVersion":"chromium-1228","queuePosition":null,"startedAt":1735686000000,"finishedAt":1735686090000},
-          {"sessionId":"sess-f1","label":"cancelled before start","mode":"compare","state":"FAILED","createdAt":1735682300000,"rendererVersion":"chromium-1228","queuePosition":null,"startedAt":null,"finishedAt":1735682400000}
-          ,{"sessionId":"sess-p1","label":"pending","mode":"record","state":"PENDING","createdAt":1735689500000,"rendererVersion":"chromium-1228","queuePosition":null,"startedAt":null,"finishedAt":null}
-          ,{"sessionId":"sess-u1","label":"uploading","mode":"record","state":"UPLOADING","createdAt":1735689500000,"rendererVersion":"chromium-1228","queuePosition":null,"startedAt":null,"finishedAt":null}
+          {"sessionId":"sess-f1","label":"cancelled before start","mode":"compare","state":"FAILED","createdAt":1735682300000,"rendererVersion":"chromium-1228","queuePosition":null,"startedAt":null,"finishedAt":1735682400000},
+          {"sessionId":"sess-p1","label":"pending","mode":"record","state":"PENDING","createdAt":1735682200000,"rendererVersion":"chromium-1228","queuePosition":null,"startedAt":null,"finishedAt":null},
+          {"sessionId":"sess-u1","label":"uploading","mode":"record","state":"UPLOADING","createdAt":1735682100000,"rendererVersion":"chromium-1228","queuePosition":null,"startedAt":null,"finishedAt":null}
         ]
     """.trimIndent()
     val api: ScreenshotTestApi = object : ScreenshotTestApi {

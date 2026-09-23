@@ -20,7 +20,7 @@ import java.net.URL
 import screenshottest.api.ScreenshotTestApi
 
 fun cancelReasonLengthIsBoundedTest() {
-    var cancellations = 0
+    val cancellations = java.util.concurrent.atomic.AtomicInteger()
     val api = object : ScreenshotTestApi {
         override fun getRendererVersion() = "renderer"
         override fun createSession(label: String, mode: String, mainClass: String, scenariosJson: String) = "unused"
@@ -34,7 +34,7 @@ fun cancelReasonLengthIsBoundedTest() {
         override fun deleteSession(sessionId: String) = Unit
         override fun getWorkerPoolStatus() = """{"maxWorkers":3,"activeWorkers":0,"queuedSessions":0,"running":[],"queued":[]}"""
         override fun setMaxWorkers(maxWorkers: Int) = Unit
-        override fun cancelSession(sessionId: String, reason: String) { cancellations++ }
+        override fun cancelSession(sessionId: String, reason: String) { cancellations.incrementAndGet() }
     }
     val server = createServer(0, api, ManualClock(1735689600000L))
     server.start()
@@ -49,7 +49,7 @@ fun cancelReasonLengthIsBoundedTest() {
         assertEquals(400, conn.responseCode)
         val body = conn.errorStream.bufferedReader().readText()
         assertTrue(body.contains("""<span class="banner-text">Cancel reason has 513 characters; the limit is 512.</span>"""), "The complete length error must be visible: $body")
-        assertEquals(0, cancellations, "An overlong reason must not reach the service")
+        assertEquals(0, cancellations.get(), "An overlong reason must not reach the service")
         val boundary = URL("http://localhost:$port/session/cancel").openConnection() as HttpURLConnection
         boundary.instanceFollowRedirects = false
         boundary.requestMethod = "POST"
@@ -57,7 +57,7 @@ fun cancelReasonLengthIsBoundedTest() {
         boundary.setRequestProperty("Content-Type", "application/x-www-form-urlencoded")
         boundary.outputStream.use { it.write("id=sess-1&reason=${"x".repeat(512)}".toByteArray()) }
         assertEquals(303, boundary.responseCode, "A 512-character reason must be accepted")
-        assertEquals(1, cancellations)
+        assertEquals(1, cancellations.get())
     } finally {
         server.stop()
     }

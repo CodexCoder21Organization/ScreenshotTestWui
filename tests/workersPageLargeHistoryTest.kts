@@ -51,6 +51,7 @@ fun workersPageLargeHistoryTest() {
         assertTrue(html.contains("current render"), "Expected the running session: $html")
         assertTrue(html.contains("current queue"), "Expected the queued session: $html")
         assertFalse(html.contains("sess-old-2000"), "History must not be rendered in worker tables")
+        assertEquals(2, Regex("""href="/session\?id=sess-""").findAll(html).count(), "Only the running and queued sessions should be linked in the worker tables")
     } finally {
         server.stop()
     }

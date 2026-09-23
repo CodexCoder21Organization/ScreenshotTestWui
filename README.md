@@ -50,8 +50,8 @@ The page checks current service data before showing a banner: the current pool s
 cancelled session must be FAILED with its recorded cancellation error, and a deleted session must no
 longer be listed. An unmatched selector shows no banner. Deleting an already absent session is
 idempotent in the service, so it may still return `303`; the banner says only that it is no longer
-listed. On failure
-the originating page is rendered directly with an error banner holding the service's full message:
+listed. On failure, the originating page is rendered directly with an error banner holding the
+service's full message:
 `400` for a missing or malformed field or a locally typed value rejection, `404` for a typed unknown
 session, `409` for a typed wrong-state response, and `502` for a connection or other backend failure.
 The currently pinned UrlResolver wraps exceptions raised inside the remote service as

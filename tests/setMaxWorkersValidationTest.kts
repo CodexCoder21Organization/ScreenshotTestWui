@@ -39,8 +39,8 @@ fun setMaxWorkersValidationTest() {
           {"sessionId":"sess-f1","label":"cancelled before start","mode":"compare","state":"FAILED","createdAt":1735682300000,"rendererVersion":"chromium-1228","queuePosition":null,"startedAt":null,"finishedAt":1735682400000}
         ]
     """.trimIndent()
-    var poolSize = 3
-    var poolAvailable = true
+    val poolSize = java.util.concurrent.atomic.AtomicInteger(3)
+    val poolAvailable = java.util.concurrent.atomic.AtomicBoolean(true)
     val cancels = java.util.Collections.synchronizedList(mutableListOf<Pair<String, String>>())
     val deletes = java.util.Collections.synchronizedList(mutableListOf<String>())
     val maxWorkerCalls = java.util.Collections.synchronizedList(mutableListOf<Int>())
@@ -62,18 +62,18 @@ fun setMaxWorkersValidationTest() {
             deletes.add(sessionId)
         }
         override fun getWorkerPoolStatus(): String {
-            if (!poolAvailable) throw RuntimeException("Pool status could not be loaded.")
-            return """{"maxWorkers":$poolSize,"activeWorkers":1,"queuedSessions":2,"running":["sess-r1"],"queued":["sess-q1","sess-q2"]}"""
+            if (!poolAvailable.get()) throw RuntimeException("Pool status could not be loaded.")
+            return """{"maxWorkers":${poolSize.get()},"activeWorkers":1,"queuedSessions":2,"running":["sess-r1"],"queued":["sess-q1","sess-q2"]}"""
         }
         override fun setMaxWorkers(maxWorkers: Int) {
             require(maxWorkers in 1..16) { "maxWorkers must be between 1 and 16, but was $maxWorkers." }
             if (maxWorkers == 7) throw RuntimeException("Pool controller did not accept size 7.")
             if (maxWorkers == 8) {
-                poolAvailable = false
+                poolAvailable.set(false)
                 throw RuntimeException("Pool controller did not accept size 8.")
             }
             maxWorkerCalls.add(maxWorkers)
-            poolSize = maxWorkers
+            poolSize.set(maxWorkers)
         }
         override fun cancelSession(sessionId: String, reason: String) {
             when (sessionId) {
@@ -115,7 +115,9 @@ fun setMaxWorkersValidationTest() {
             assertEquals(200, code)
             assertTrue(html.contains("""<span class="banner-text">Pool size is now $boundary.</span>"""), "Expected live pool notice; page was:\n$html")
             assertTrue(html.contains("""name="maxWorkers" size="4" value="$boundary">"""), "The form must show the new pool size; page was:\n$html")
-            assertTrue(html.contains("""<div class="info-label">Max workers"""), "The pool summary must be present; page was:\n$html")
+            val cardValue = html.substringAfter("""<div class="info-label">Max workers""")
+                .substringAfter("""</div><div class="info-value">""").substringBefore("</div>")
+            assertEquals(boundary.toString(), cardValue, "The pool summary must show the new size")
         }
 
         val outOfRange = post(port, "/workers/max", "maxWorkers=17")
@@ -139,7 +141,7 @@ fun setMaxWorkersValidationTest() {
         val doubleFailureHtml = bodyOf(doubleFailure)
         assertTrue(doubleFailureHtml.contains("Pool controller did not accept size 8."), "The action message must remain visible: $doubleFailureHtml")
         assertTrue(doubleFailureHtml.contains("Pool status could not be loaded."), "The page failure must be visible: $doubleFailureHtml")
-        poolAvailable = true
+        poolAvailable.set(true)
         assertFalse(outOfRangeHtml.contains("http-equiv=\"refresh\""), "An error page must not auto-refresh the error away.")
 
         val nonNumeric = post(port, "/workers/max", "maxWorkers=four")
@@ -159,7 +161,7 @@ fun setMaxWorkersValidationTest() {
         )
 
         assertEquals(listOf(1, 16), maxWorkerCalls.toList(), "Only the valid values may change the pool.")
-        assertEquals(16, poolSize, "Rejected values must leave the pool unchanged.")
+        assertEquals(16, poolSize.get(), "Rejected values must leave the pool unchanged.")
     } finally {
         server.stop()
     }
