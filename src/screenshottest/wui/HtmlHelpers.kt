@@ -67,13 +67,19 @@ fun modeBadgeHtml(mode: String): String {
     return "<span class=\"badge $cls\">${escapeHtml(mode)}</span>"
 }
 
-fun pageHeader(title: String): String {
+/**
+ * The page head, styles, and nav bar.
+ *
+ * @param extraHead Raw markup appended inside `<head>` (e.g. the `/workers` auto-refresh `<meta>`);
+ *   the caller is responsible for escaping anything dynamic in it.
+ */
+fun pageHeader(title: String, extraHead: String = ""): String {
     return """<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>${escapeHtml(title)}</title>
+<title>${escapeHtml(title)}</title>$extraHead
 <style>
 :root {
     --bg-primary: #0d1117;
@@ -131,8 +137,9 @@ tr:last-child td { border-bottom: none; }
 .badge-destroying { background: #2d2207; color: var(--yellow); }
 .badge-completed { background: #12261e; color: var(--green); }
 .badge-failed { background: #2d1215; color: var(--red); }
-.badge-running { background: #1f2d40; color: var(--blue); animation: pulse-running 1.5s ease-in-out infinite; }
-@keyframes pulse-running { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
+/* Deliberately static: a session waiting for a worker is also RUNNING, so a pulsing RUNNING badge
+ * would present queued sessions as active. The Phase badge carries Queued #n vs Rendering. */
+.badge-running { background: #1f2d40; color: var(--blue); }
 .row-status-pending td { background: #1d2229; }
 .row-status-provisioning td { background: #18202a; }
 .row-status-completed td { background: #151e21; }
@@ -160,6 +167,87 @@ tr:last-child td { border-bottom: none; }
 }
 nav { background: var(--bg-secondary); border-bottom: 1px solid var(--border); padding: 12px 16px; }
 nav a { margin-right: 16px; font-weight: 600; }
+nav .brand { margin-right: 24px; font-weight: 700; color: var(--text-primary); }
+/* Outcome banners: a notice after a successful action, an error when the backend refused one. */
+.banner {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 14px;
+    margin: 0 0 16px;
+    font-size: 14px;
+}
+.banner-notice { background: #12261e; border-color: #238636; color: var(--text-primary); }
+.banner-error { background: #2d1215; border-color: var(--red); color: var(--text-primary); }
+.banner-label { font-weight: 700; text-transform: uppercase; font-size: 12px; letter-spacing: 0.05em; padding-top: 2px; }
+.banner-notice .banner-label { color: var(--green); }
+.banner-error .banner-label { color: var(--red); }
+.banner-text { flex: 1; word-break: break-word; }
+.banner-dismiss {
+    background: none;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 18px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0 4px;
+}
+.banner-dismiss:hover, .banner-dismiss:focus { color: var(--text-primary); }
+/* Row / page actions: small inline POST forms. */
+form.inline-action { display: inline; margin: 0; }
+.actions-cell { white-space: nowrap; }
+.btn {
+    display: inline-block;
+    font: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 3px 12px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    cursor: pointer;
+}
+.btn:hover, .btn:focus { border-color: var(--text-secondary); }
+.btn-danger { color: var(--red); }
+.btn-danger:hover, .btn-danger:focus { background: #2d1215; border-color: var(--red); }
+.btn-primary { background: #238636; border-color: #2ea043; color: #ffffff; }
+.text-input {
+    font: inherit;
+    font-size: 14px;
+    padding: 4px 8px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--bg-primary);
+    color: var(--text-primary);
+}
+.form-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 8px 0 16px; }
+.form-caption { font-size: 12px; color: var(--text-secondary); }
+.panel { background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 6px; padding: 12px 16px; margin: 16px 0; }
+.panel h2 { margin-top: 0; font-size: 16px; }
+.info-icon {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    line-height: 14px;
+    border-radius: 50%;
+    border: 1px solid var(--text-secondary);
+    color: var(--text-secondary);
+    font-size: 10px;
+    font-weight: 700;
+    text-align: center;
+    text-transform: none;
+    margin-left: 4px;
+    cursor: help;
+    font-style: normal;
+}
+.table-scroll { overflow-x: auto; margin-bottom: 16px; }
+.table-scroll table { margin-bottom: 0; }
+.table-scroll th, .table-scroll td { padding: 8px 12px; }
+.refresh-note { font-size: 12px; color: var(--text-secondary); margin-bottom: 16px; }
+.badge-queued { background: #2d2207; color: var(--yellow); }
 .date-cell .date-relative { font-weight: 600; }
 .date-cell .date-local, .date-cell .date-utc { font-size: 12px; color: var(--text-secondary); }
 /* Per-key screenshot gallery: the actual / golden / diff thumbnails for one image key,
@@ -196,7 +284,9 @@ nav a { margin-right: 16px; font-weight: 600; }
 </head>
 <body>
 <nav>
-    <a href="/">ScreenshotTest</a>
+    <span class="brand">ScreenshotTest</span>
+    <a href="/">Sessions</a>
+    <a href="/workers">Workers</a>
     <a href="/health">Health</a>
 </nav>
 """
@@ -262,10 +352,11 @@ fun pageFooter(nowMs: Long = System.currentTimeMillis()): String {
 }
 
 /** Renders a standalone error page with [message] already HTML-escaped by the caller when needed. */
-fun errorPage(message: String): String {
+fun errorPage(message: String, banner: Banner? = null): String {
     return buildString {
         append(pageHeader("ScreenshotTest - Error"))
         append("<div class=\"container\">")
+        if (banner != null) append(bannerHtml(banner))
         append("<h1>Error</h1>")
         append("<div class=\"info-card error-card\">")
         append("<div class=\"info-value text-red\">$message</div>")

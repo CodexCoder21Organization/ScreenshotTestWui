@@ -2,6 +2,7 @@ package screenshottest.wui
 
 import community.kotlin.clocks.simple.Clock
 import community.kotlin.clocks.simple.ManualClock
+import org.eclipse.jetty.server.NetworkConnector
 import org.json.JSONArray
 import org.json.JSONObject
 import screenshottest.api.ScreenshotTestApi
@@ -21,7 +22,8 @@ import javax.imageio.ImageIO
  * https://github.com/CodexCoder21Organization/PlanRepository/blob/main/workstreams/ScreenshotTest.md).
  *
  * This is the WUI dogfooding its own service: the `url://screenshottest/` runner launches this class's
- * [main] on a worker with `PORT` set, drives the pinned Chromium against `http://127.0.0.1:$PORT`, and
+ * [main] on a worker with `PORT=0`, reads the `SCREENSHOTTEST_ENDPOINT` line [main] prints once it has
+ * bound, drives the pinned Chromium against that announced loopback endpoint, and
  * compares the captured pixels against the goldens committed under `screenshots/`. For that comparison
  * to stay green day after day the rendered bytes must not depend on the wall clock, so:
  *
@@ -35,6 +37,7 @@ import javax.imageio.ImageIO
 /** The frozen wall clock the fixture renders against: 2026-01-01T00:00:00Z, in epoch milliseconds. */
 private val FIXED_NOW_MS: Long = Instant.parse("2026-01-01T00:00:00Z").toEpochMilli()
 
+private const val SECOND = 1_000L
 private const val MINUTE = 60_000L
 private const val HOUR = 3_600_000L
 private const val DAY = 86_400_000L
@@ -63,6 +66,10 @@ private class FixtureSession(
     val createdAt: Long,
     val error: String?,
     val results: List<FixtureResult>,
+    /** 0-based place in the worker queue while waiting for a render worker; null otherwise. */
+    val queuePosition: Int? = null,
+    val startedAt: Long? = null,
+    val finishedAt: Long? = null,
 )
 
 /** The compare session whose detail page the golden scenarios capture: one MATCH and one DIFF key. */
@@ -72,6 +79,8 @@ private val COMPARE_SESSION = FixtureSession(
     mode = "compare",
     state = "COMPLETED",
     createdAt = FIXED_NOW_MS - (2 * HOUR + 12 * MINUTE),
+    startedAt = FIXED_NOW_MS - (2 * HOUR + 11 * MINUTE + 20 * SECOND),
+    finishedAt = FIXED_NOW_MS - (2 * HOUR + 7 * MINUTE + 53 * SECOND),
     error = null,
     results = listOf(
         FixtureResult("runs-list", "MATCH", diffPixelCount = 0, maxChannelDelta = 0, width = 460, height = 340, hasGolden = true),
@@ -85,6 +94,8 @@ private val RECORD_SESSION = FixtureSession(
     mode = "record",
     state = "COMPLETED",
     createdAt = FIXED_NOW_MS - (1 * DAY + 3 * HOUR),
+    startedAt = FIXED_NOW_MS - (1 * DAY + 3 * HOUR) + 25 * SECOND,
+    finishedAt = FIXED_NOW_MS - (1 * DAY + 3 * HOUR) + 2 * MINUTE + 51 * SECOND,
     error = null,
     results = listOf(
         FixtureResult("summary", "RECORDED", diffPixelCount = 0, maxChannelDelta = 0, width = 460, height = 300, hasGolden = false),
@@ -98,12 +109,66 @@ private val FAILED_SESSION = FixtureSession(
     mode = "compare",
     state = "FAILED",
     createdAt = FIXED_NOW_MS - (3 * DAY + 5 * HOUR),
+    startedAt = FIXED_NOW_MS - (3 * DAY + 5 * HOUR) + 15 * SECOND,
+    finishedAt = FIXED_NOW_MS - (3 * DAY + 5 * HOUR) + 5 * MINUTE + 17 * SECOND,
     error = "Worker provisioning failed: droplet did not become reachable within 300s.",
     results = emptyList(),
 )
 
+/** Two sessions rendering on the fixture's two-worker pool (the pool is full, so others queue). */
+private val RENDERING_SESSION_A = FixtureSession(
+    sessionId = "sess-2d6c8b13",
+    label = "NetLab WUI golden screenshots",
+    mode = "record",
+    state = "RUNNING",
+    createdAt = FIXED_NOW_MS - 9 * MINUTE,
+    startedAt = FIXED_NOW_MS - (4 * MINUTE + 10 * SECOND),
+    error = null,
+    results = emptyList(),
+)
+
+private val RENDERING_SESSION_B = FixtureSession(
+    sessionId = "sess-3e5a7d94",
+    label = "ContainerNursery WUI golden screenshots",
+    mode = "compare",
+    state = "RUNNING",
+    createdAt = FIXED_NOW_MS - 6 * MINUTE,
+    startedAt = FIXED_NOW_MS - (1 * MINUTE + 35 * SECOND),
+    error = null,
+    results = emptyList(),
+)
+
+/** Two sessions waiting for a worker, in service order (queuePosition 0 is served next). */
+private val QUEUED_SESSION_FIRST = FixtureSession(
+    sessionId = "sess-4b8f2a61",
+    label = "AiCliSupervisorManagerWui golden screenshots",
+    mode = "compare",
+    state = "RUNNING",
+    createdAt = FIXED_NOW_MS - 3 * MINUTE,
+    queuePosition = 0,
+    error = null,
+    results = emptyList(),
+)
+
+private val QUEUED_SESSION_SECOND = FixtureSession(
+    sessionId = "sess-7c1d9e20",
+    label = "HandoffWui golden screenshots",
+    mode = "compare",
+    state = "RUNNING",
+    createdAt = FIXED_NOW_MS - 1 * MINUTE,
+    queuePosition = 1,
+    error = null,
+    results = emptyList(),
+)
+
+/** The fixture's worker pool size: both workers are busy, so two sessions queue. */
+private const val MAX_WORKERS = 2
+
 /** All sessions, newest first (the order [ScreenshotTestApi.listSessions] must return). */
-private val SESSIONS: List<FixtureSession> = listOf(COMPARE_SESSION, RECORD_SESSION, FAILED_SESSION)
+private val SESSIONS: List<FixtureSession> = listOf(
+    QUEUED_SESSION_SECOND, QUEUED_SESSION_FIRST, RENDERING_SESSION_B, RENDERING_SESSION_A,
+    COMPARE_SESSION, RECORD_SESSION, FAILED_SESSION,
+)
 
 /**
  * Every produced image, keyed `"<sessionId>|<key>|<kind>"`. Built once, deterministically. Each is a
@@ -207,6 +272,9 @@ private fun buildFixtureApi(): ScreenshotTestApi = object : ScreenshotTestApi {
             .put("state", s.state)
             .put("error", s.error ?: JSONObject.NULL)
             .put("rendererVersion", RENDERER)
+            .put("queuePosition", s.queuePosition ?: JSONObject.NULL)
+            .put("startedAt", s.startedAt ?: JSONObject.NULL)
+            .put("finishedAt", s.finishedAt ?: JSONObject.NULL)
             .toString()
     }
 
@@ -262,6 +330,9 @@ private fun buildFixtureApi(): ScreenshotTestApi = object : ScreenshotTestApi {
                     .put("state", s.state)
                     .put("createdAt", s.createdAt)
                     .put("rendererVersion", RENDERER)
+                    .put("queuePosition", s.queuePosition ?: JSONObject.NULL)
+                    .put("startedAt", s.startedAt ?: JSONObject.NULL)
+                    .put("finishedAt", s.finishedAt ?: JSONObject.NULL)
             )
         }
         return arr.toString()
@@ -270,6 +341,24 @@ private fun buildFixtureApi(): ScreenshotTestApi = object : ScreenshotTestApi {
     override fun deleteSession(sessionId: String) {
         // No-op: the fixture is read-only. Idempotent deletion is a valid contract behavior.
     }
+
+    override fun getWorkerPoolStatus(): String {
+        val rendering = SESSIONS.filter { it.state == "RUNNING" && it.queuePosition == null }
+        val queued = SESSIONS.filter { it.queuePosition != null }.sortedBy { it.queuePosition }
+        return JSONObject()
+            .put("maxWorkers", MAX_WORKERS)
+            .put("activeWorkers", rendering.size)
+            .put("queuedSessions", queued.size)
+            .put("running", JSONArray(rendering.map { it.sessionId }))
+            .put("queued", JSONArray(queued.map { it.sessionId }))
+            .toString()
+    }
+
+    override fun setMaxWorkers(maxWorkers: Int) =
+        throw UnsupportedOperationException("ScreenshotFixtureServer is read-only")
+
+    override fun cancelSession(sessionId: String, reason: String) =
+        throw UnsupportedOperationException("ScreenshotFixtureServer is read-only")
 
     private fun session(sessionId: String): FixtureSession =
         SESSIONS.firstOrNull { it.sessionId == sessionId }
@@ -282,11 +371,18 @@ private fun buildFixtureApi(): ScreenshotTestApi = object : ScreenshotTestApi {
  */
 fun main() {
     System.setProperty("java.awt.headless", "true")
-    val port = System.getenv("PORT")?.toIntOrNull() ?: 8080
+    val requestedPort = System.getenv("PORT")?.toIntOrNull() ?: 8080
     val clock: Clock = ManualClock(FIXED_NOW_MS)
-    println("Starting ScreenshotTest WUI screenshot fixture on port $port (frozen clock @ $FIXED_NOW_MS)...")
-    val server = createServer(port, buildFixtureApi(), clock)
+    val server = createServer(requestedPort, buildFixtureApi(), clock)
     server.start()
-    println("Fixture WUI running at http://0.0.0.0:$port/")
+    // The screenshottest runner launches this main with PORT=0 and waits for exactly one endpoint
+    // announcement naming the port the operating system actually assigned, followed by the
+    // completion boundary; without these lines the runner never renders against this server.
+    val boundPort = (server.connectors.single() as NetworkConnector).localPort
+    println("SCREENSHOTTEST_ENDPOINT {\"host\":\"127.0.0.1\",\"port\":$boundPort}")
+    println("SCREENSHOTTEST_ENDPOINTS_COMPLETE")
+    System.out.flush()
+    println("Starting ScreenshotTest WUI screenshot fixture on port $requestedPort (frozen clock @ $FIXED_NOW_MS)...")
+    println("Fixture WUI running at http://127.0.0.1:$boundPort/")
     server.join()
 }

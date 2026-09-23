@@ -18,40 +18,61 @@
 package screenshottest.wui
 
 import build.kotlin.withartifact.WithArtifact
+import community.kotlin.clocks.simple.ManualClock
 import kotlin.test.*
 import java.net.HttpURLConnection
 import java.net.URL
 import screenshottest.api.ScreenshotTestApi
 
 /**
- * The health endpoint must answer 200 OK with body "OK" without touching the backend, so
- * ContainerNursery can confirm the WUI is live before the lazy url://screenshottest/ connection.
+ * When the worker-pool status call fails, /workers answers 502 with the backend's message, not a
+ * misleading 200 or a bare 500.
  */
-fun healthEndpointReturnsOkTest() {
+fun workersPageBackendErrorReturns502Test() {
     val api: ScreenshotTestApi = object : ScreenshotTestApi {
         override fun getRendererVersion(): String = throw UnsupportedOperationException()
         override fun createSession(label: String, mode: String, mainClass: String, scenariosJson: String): String = throw UnsupportedOperationException()
         override fun uploadFileChunk(sessionId: String, role: String, fileName: String, chunkIndex: Int, chunk: ByteArray) = throw UnsupportedOperationException()
         override fun finalizeFile(sessionId: String, role: String, fileName: String, totalChunks: Int, sha256Hex: String) = throw UnsupportedOperationException()
         override fun startRender(sessionId: String) = throw UnsupportedOperationException()
-        override fun getSessionStatus(sessionId: String): String = throw UnsupportedOperationException()
         override fun getResultsJson(sessionId: String): String = throw UnsupportedOperationException()
         override fun getImageChunk(sessionId: String, key: String, kind: String, offset: Long, length: Int): ByteArray? = throw UnsupportedOperationException()
-        override fun listSessions(): String = throw UnsupportedOperationException()
-        override fun deleteSession(sessionId: String) {}
-        override fun getWorkerPoolStatus(): String = throw UnsupportedOperationException()
+        override fun getSessionStatus(sessionId: String): String = throw UnsupportedOperationException()
+        override fun listSessions(): String = "[]"
+        override fun deleteSession(sessionId: String) = throw UnsupportedOperationException()
+        override fun getWorkerPoolStatus(): String = throw RuntimeException("url://screenshottest/ is unreachable")
         override fun setMaxWorkers(maxWorkers: Int) = throw UnsupportedOperationException()
         override fun cancelSession(sessionId: String, reason: String) = throw UnsupportedOperationException()
     }
-    val server = createServer(0, api)
+    fun get(port: Int, path: String): Pair<Int, String> {
+        val conn = URL("http://localhost:$port$path").openConnection() as HttpURLConnection
+        conn.instanceFollowRedirects = false
+        val code = conn.responseCode
+        val body = (if (code < 400) conn.inputStream else conn.errorStream).bufferedReader().readText()
+        return code to body
+    }
+    fun post(port: Int, path: String, form: String, headers: Map<String, String> = emptyMap()): HttpURLConnection {
+        val conn = URL("http://localhost:$port$path").openConnection() as HttpURLConnection
+        conn.instanceFollowRedirects = false
+        conn.requestMethod = "POST"
+        conn.doOutput = true
+        conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded")
+        for ((k, v) in headers) conn.setRequestProperty(k, v)
+        conn.outputStream.use { it.write(form.toByteArray(Charsets.UTF_8)) }
+        return conn
+    }
+    fun bodyOf(conn: HttpURLConnection): String =
+        (if (conn.responseCode < 400) conn.inputStream else conn.errorStream).bufferedReader().readText()
+    val server = createServer(0, api, ManualClock(1735689600000L)) // 2025-01-01T00:00:00Z
     server.start()
     try {
         val port = (server.connectors[0] as org.eclipse.jetty.server.ServerConnector).localPort
-        val conn = URL("http://localhost:$port/health").openConnection() as HttpURLConnection
-        conn.requestMethod = "GET"
-        val body = conn.inputStream.bufferedReader().readText()
-        assertEquals(200, conn.responseCode, "Expected HTTP 200 from /health but got ${conn.responseCode}")
-        assertEquals("OK", body, "Expected body 'OK' from /health but got '$body'")
+        val (code, html) = get(port, "/workers")
+        assertEquals(502, code, "Expected HTTP 502 when the backend is unreachable; body:\n$html")
+        assertTrue(
+            html.contains("""<div class="info-value text-red">Failed to load the render worker pool: url://screenshottest/ is unreachable</div>"""),
+            "Expected the descriptive backend-failure message; page was:\n$html"
+        )
     } finally {
         server.stop()
     }

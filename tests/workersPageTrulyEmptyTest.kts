@@ -18,50 +18,41 @@
 package screenshottest.wui
 
 import build.kotlin.withartifact.WithArtifact
+import community.kotlin.clocks.simple.ManualClock
 import kotlin.test.*
 import java.net.HttpURLConnection
 import java.net.URL
 import screenshottest.api.ScreenshotTestApi
 
-/**
- * When the service rejects the image key (it produced no such image) with an IllegalArgumentException,
- * the /image endpoint must answer 404 with a descriptive message naming the session, key, kind, and
- * carrying the service's own explanation — not a 500 or an opaque error.
- */
-fun imageEndpointUnknownKeyReturns404Test() {
+fun workersPageTrulyEmptyTest() {
     val api: ScreenshotTestApi = object : ScreenshotTestApi {
-        override fun getRendererVersion(): String = "chromium-1228"
+        override fun getRendererVersion(): String = throw UnsupportedOperationException()
         override fun createSession(label: String, mode: String, mainClass: String, scenariosJson: String): String = throw UnsupportedOperationException()
         override fun uploadFileChunk(sessionId: String, role: String, fileName: String, chunkIndex: Int, chunk: ByteArray) = throw UnsupportedOperationException()
         override fun finalizeFile(sessionId: String, role: String, fileName: String, totalChunks: Int, sha256Hex: String) = throw UnsupportedOperationException()
         override fun startRender(sessionId: String) = throw UnsupportedOperationException()
-        override fun getSessionStatus(sessionId: String): String = throw UnsupportedOperationException()
         override fun getResultsJson(sessionId: String): String = throw UnsupportedOperationException()
-        override fun getImageChunk(sessionId: String, key: String, kind: String, offset: Long, length: Int): ByteArray? =
-            throw IllegalArgumentException("Session 'sess-img' produced no image for key 'nonexistent'.")
-        override fun listSessions(): String = throw UnsupportedOperationException()
-        override fun deleteSession(sessionId: String) {}
-        override fun getWorkerPoolStatus(): String = throw UnsupportedOperationException()
+        override fun getImageChunk(sessionId: String, key: String, kind: String, offset: Long, length: Int): ByteArray? = throw UnsupportedOperationException()
+        override fun getSessionStatus(sessionId: String): String = throw UnsupportedOperationException()
+        override fun listSessions(): String = "[]"
+        override fun getWorkerPoolStatus(): String = """{"maxWorkers":4,"activeWorkers":0,"queuedSessions":0,"running":[],"queued":[]}"""
+        override fun deleteSession(sessionId: String) = throw UnsupportedOperationException()
         override fun setMaxWorkers(maxWorkers: Int) = throw UnsupportedOperationException()
         override fun cancelSession(sessionId: String, reason: String) = throw UnsupportedOperationException()
     }
-
-    val server = createServer(0, api)
+    val server = createServer(0, api, ManualClock(1735689600000L))
     server.start()
     try {
         val port = (server.connectors[0] as org.eclipse.jetty.server.ServerConnector).localPort
-        val conn = URL("http://localhost:$port/image?id=sess-img&key=nonexistent&kind=actual").openConnection() as HttpURLConnection
-        assertEquals(404, conn.responseCode, "Expected HTTP 404 for an unknown image key; got ${conn.responseCode}")
-        assertTrue(
-            (conn.getHeaderField("Content-Type") ?: "").startsWith("text/plain"),
-            "Expected a text/plain error body; got ${conn.getHeaderField("Content-Type")}"
-        )
-        val body = (conn.errorStream ?: conn.inputStream).bufferedReader().readText()
-        assertEquals(
-            "No image for session \"sess-img\", key \"nonexistent\", kind \"actual\": Session 'sess-img' produced no image for key 'nonexistent'.",
-            body,
-            "Expected the full descriptive 404 body naming session/key/kind and the service reason; got:\n$body"
-        )
+        val conn = URL("http://localhost:$port/workers?refresh=0").openConnection() as HttpURLConnection
+        val html = conn.inputStream.bufferedReader().readText()
+        assertEquals(200, conn.responseCode)
+        assertTrue(html.contains("No session is rendering right now."), "Expected the empty running state: $html")
+        assertTrue(html.contains("No session is waiting for a worker."), "Expected the empty queue state: $html")
+        assertTrue(html.contains("""<div class="info-value">0 / 4</div>"""), "Expected zero active workers out of four: $html")
+        assertTrue(html.contains("""<div class="info-value">0</div>"""), "Expected zero queued sessions: $html")
+        assertFalse(html.contains("id=\"running-table\""))
+        assertFalse(html.contains("id=\"queued-table\""))
     } finally {
         server.stop()
     }

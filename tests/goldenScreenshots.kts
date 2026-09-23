@@ -18,7 +18,7 @@
 @file:WithArtifact("community.kotlin.clocks.simple:community-kotlin-clocks-simple:0.0.3")
 @file:WithArtifact("community.kotlin.rpc:protocol-api:0.0.2")
 @file:WithArtifact("community.kotlin.rpc:protocol-impl:0.0.11")
-@file:WithArtifact("screenshottest.api:screenshottest-api:0.0.1")
+@file:WithArtifact("screenshottest.api:screenshottest-api:0.0.3")
 @file:WithArtifact("org.json:json:20250517")
 @file:WithArtifact("com.squareup.okio:okio-jvm:3.4.0")
 @file:WithArtifact("org.jetbrains.kotlin:kotlin-stdlib:1.9.22")
@@ -190,8 +190,9 @@ fun goldenScreenshots() {
         return out.toByteArray()
     }
 
-    // The scenarios to capture: the sessions list (full page) and a COMPLETED compare session's detail
-    // page (full page) plus the results-table crop. 1280x900 viewport. waitSelector holds the capture
+    // The scenarios to capture: the sessions list (full page), a COMPLETED compare session's detail
+    // page (full page) plus the results-table crop, a queued session's detail page, and the worker
+    // pool page. 1280x900 viewport. waitSelector holds the capture
     // until the page's marker element is present.
     fun buildScenariosJson(): String {
         val scenarios = JSONArray()
@@ -217,6 +218,30 @@ fun goldenScreenshots() {
                 .put("viewportHeight", 900)
                 .put("fullPage", true)
                 .put("components", components)
+        )
+        // A session still waiting for a render worker: its phase, queue position, timing cards, and
+        // the Cancel panel.
+        scenarios.put(
+            JSONObject()
+                .put("name", "session-detail-queued")
+                .put("path", "/session?id=sess-4b8f2a61")
+                .put("waitSelector", "#session-actions")
+                .put("settleMs", 800)
+                .put("viewportWidth", 1280)
+                .put("viewportHeight", 900)
+                .put("fullPage", true)
+        )
+        // The worker pool page with two sessions rendering and two queued. refresh=0 so the page's
+        // 15-second auto-reload cannot fire mid-capture.
+        scenarios.put(
+            JSONObject()
+                .put("name", "workers")
+                .put("path", "/workers?refresh=0")
+                .put("waitSelector", "#queued-table")
+                .put("settleMs", 800)
+                .put("viewportWidth", 1280)
+                .put("viewportHeight", 900)
+                .put("fullPage", true)
         )
         return JSONObject().put("scenarios", scenarios).toString()
     }
@@ -325,6 +350,10 @@ fun goldenScreenshots() {
             )
             val keyResults = results.getJSONArray("results")
             assertTrue(keyResults.length() > 0, "results.json contained no per-key results")
+            val expectedKeys = setOf("sessions-list", "session-detail", "session-detail.results-table", "session-detail-queued", "workers")
+            val actualKeys = (0 until keyResults.length()).map { keyResults.getJSONObject(it).getString("key") }.toSet()
+            assertEquals(expectedKeys.size, keyResults.length(), "The golden run must return five captures without duplicate keys")
+            assertEquals(expectedKeys, actualKeys, "The golden run must return exactly the five captured page keys")
 
             if (record) {
                 screenshotsDir.mkdirs()
