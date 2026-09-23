@@ -31,8 +31,20 @@ class CancelSessionServlet : HttpServlet() {
                 "Cannot cancel: the form is missing the required field \"id\" (the session id to cancel).")
             return
         }
-        val reason = req.getParameter("reason")?.trim().takeUnless { it.isNullOrEmpty() } ?: DEFAULT_CANCEL_REASON
-        val api = servletContext.getScreenshotTestApi()
+        val suppliedReason = req.getParameter("reason")
+        if (suppliedReason != null && suppliedReason.length > MAX_CANCEL_REASON_LENGTH) {
+            renderActionError(resp, target, id, HttpServletResponse.SC_BAD_REQUEST,
+                "Cancel reason has ${suppliedReason.length} characters; the limit is $MAX_CANCEL_REASON_LENGTH.")
+            return
+        }
+        val reason = suppliedReason?.trim().takeUnless { it.isNullOrEmpty() } ?: DEFAULT_CANCEL_REASON
+        val api = try {
+            servletContext.getScreenshotTestApi()
+        } catch (e: Exception) {
+            renderActionError(resp, target, id, HttpServletResponse.SC_BAD_GATEWAY,
+                "The screenshot service failed to cancel session '$id': ${e.message ?: e.javaClass.name}")
+            return
+        }
         try {
             api.cancelSession(id, reason)
         } catch (e: Exception) {
@@ -56,7 +68,13 @@ class DeleteSessionServlet : HttpServlet() {
                 "Cannot delete: the form is missing the required field \"id\" (the session id to delete).")
             return
         }
-        val api = servletContext.getScreenshotTestApi()
+        val api = try {
+            servletContext.getScreenshotTestApi()
+        } catch (e: Exception) {
+            renderActionError(resp, target, id, HttpServletResponse.SC_BAD_GATEWAY,
+                "The screenshot service failed to delete session '$id': ${e.message ?: e.javaClass.name}")
+            return
+        }
         try {
             api.deleteSession(id)
         } catch (e: Exception) {
@@ -84,7 +102,13 @@ class SetMaxWorkersServlet : HttpServlet() {
                 "Cannot set max workers: \"maxWorkers\" must be a whole number, but was \"${raw.trim()}\".")
             return
         }
-        val api = servletContext.getScreenshotTestApi()
+        val api = try {
+            servletContext.getScreenshotTestApi()
+        } catch (e: Exception) {
+            renderWorkersError(resp, HttpServletResponse.SC_BAD_GATEWAY, raw,
+                "The screenshot service failed to set max workers to $value: ${e.message ?: e.javaClass.name}")
+            return
+        }
         try {
             api.setMaxWorkers(value)
         } catch (e: IllegalArgumentException) {
@@ -101,9 +125,15 @@ class SetMaxWorkersServlet : HttpServlet() {
     }
 
     private fun renderWorkersError(resp: HttpServletResponse, status: Int, rawInput: String?, message: String) {
-        val api = servletContext.getScreenshotTestApi()
-        val clock = servletContext.getScreenshotTestClock()
-        val page = renderWorkersPage(api, clock.currentTimeMillis(), Banner(Banner.Kind.ERROR, message), autoRefresh = false, maxWorkersInput = rawInput)
+        val banner = Banner(Banner.Kind.ERROR, message)
+        val page = try {
+            val api = servletContext.getScreenshotTestApi()
+            val clock = servletContext.getScreenshotTestClock()
+            renderWorkersPage(api, clock.currentTimeMillis(), banner, autoRefresh = false, maxWorkersInput = rawInput)
+        } catch (e: Exception) {
+            PageResult(HttpServletResponse.SC_BAD_GATEWAY,
+                errorPage("Failed to load the render worker pool: ${escapeHtml(e.message ?: e.javaClass.name)}", banner))
+        }
         writePage(resp, page, status)
     }
 }
@@ -126,13 +156,18 @@ private fun HttpServlet.renderActionError(
     status: Int,
     message: String,
 ) {
-    val api = servletContext.getScreenshotTestApi()
-    val nowMs = servletContext.getScreenshotTestClock().currentTimeMillis()
     val banner = Banner(Banner.Kind.ERROR, message)
-    val page = when {
-        target == ReturnTarget.WORKERS -> renderWorkersPage(api, nowMs, banner, autoRefresh = false)
-        target == ReturnTarget.SESSION && !sessionId.isNullOrBlank() -> renderSessionDetailPage(api, nowMs, sessionId, banner)
-        else -> renderSessionListPage(api, nowMs, banner)
+    val page = try {
+        val api = servletContext.getScreenshotTestApi()
+        val nowMs = servletContext.getScreenshotTestClock().currentTimeMillis()
+        when {
+            target == ReturnTarget.WORKERS -> renderWorkersPage(api, nowMs, banner, autoRefresh = false)
+            target == ReturnTarget.SESSION && !sessionId.isNullOrBlank() -> renderSessionDetailPage(api, nowMs, sessionId, banner)
+            else -> renderSessionListPage(api, nowMs, banner)
+        }
+    } catch (e: Exception) {
+        PageResult(HttpServletResponse.SC_BAD_GATEWAY,
+            errorPage("Failed to load the action's return page: ${escapeHtml(e.message ?: e.javaClass.name)}", banner))
     }
     writePage(resp, page, status)
 }

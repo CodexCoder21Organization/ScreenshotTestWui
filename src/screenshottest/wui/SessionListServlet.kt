@@ -21,7 +21,8 @@ class SessionListServlet : HttpServlet() {
     override fun doGet(req: HttpServletRequest, resp: HttpServletResponse) {
         val api = servletContext.getScreenshotTestApi()
         val clock = servletContext.getScreenshotTestClock()
-        val page = renderSessionListPage(api, clock.currentTimeMillis(), noticeBanner(req.getParameter("notice"), req.getParameter("noticeId")))
+        val page = renderSessionListPage(api, clock.currentTimeMillis(), null,
+            req.getParameter("notice"), req.getParameter("noticeId"))
         resp.contentType = "text/html; charset=UTF-8"
         resp.status = page.status
         resp.writer.write(page.html)
@@ -32,7 +33,9 @@ class SessionListServlet : HttpServlet() {
  * Renders the sessions list with an optional [banner] above the table. A backend failure yields a
  * `502` error page that still carries [banner], so an action's outcome is never lost.
  */
-fun renderSessionListPage(api: ScreenshotTestApi, nowMs: Long, banner: Banner?): PageResult {
+fun renderSessionListPage(
+    api: ScreenshotTestApi, nowMs: Long, banner: Banner?, noticeCode: String? = null, noticeId: String? = null,
+): PageResult {
     val sessions: JSONArray = try {
         JSONArray(api.listSessions())
     } catch (e: Exception) {
@@ -44,10 +47,16 @@ fun renderSessionListPage(api: ScreenshotTestApi, nowMs: Long, banner: Banner?):
         )
     }
 
+    val liveBanner = if (banner != null) banner else try {
+        sessionNoticeBanner(api, sessions, noticeCode, noticeId)
+    } catch (e: Exception) {
+        return PageResult(HttpServletResponse.SC_BAD_GATEWAY,
+            errorPage("Failed to verify the session notice: ${escapeHtml(e.message ?: e.javaClass.name)}"))
+    }
     val html = buildString {
         append(pageHeader("ScreenshotTest - Sessions"))
         append("<div class=\"container\">")
-        if (banner != null) append(bannerHtml(banner))
+        if (liveBanner != null) append(bannerHtml(liveBanner))
         append("<h1>Render Sessions</h1>")
         append("<p class=\"subtitle\">${sessions.length()} session${if (sessions.length() == 1) "" else "s"}, newest first &middot; <a href=\"/workers\">worker pool</a></p>")
 

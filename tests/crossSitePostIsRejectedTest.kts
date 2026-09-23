@@ -106,13 +106,27 @@ fun crossSitePostIsRejectedTest() {
         )
         val (sameSiteCode, sameSiteBody) = rawPost(port, "/session/delete", "id=sess-c1", mapOf("Sec-Fetch-Site" to "same-site"))
         assertEquals(403, sameSiteCode, "Expected 403 for a same-site (different subdomain) POST; body:\n$sameSiteBody")
+        assertEquals(
+            "Refusing POST /session/delete: the browser reported it as a same-site request (Sec-Fetch-Site: same-site, Origin: absent). Management actions must be submitted from this WUI's own pages.",
+            sameSiteBody,
+        )
         val (maxCode, maxBody) = rawPost(port, "/workers/max", "maxWorkers=2", mapOf("Sec-Fetch-Site" to "cross-site"))
         assertEquals(403, maxCode, "Expected 403 for a cross-site max-workers POST; body:\n$maxBody")
+        assertEquals(
+            "Refusing POST /workers/max: the browser reported it as a cross-site request (Sec-Fetch-Site: cross-site, Origin: absent). Management actions must be submitted from this WUI's own pages.",
+            maxBody,
+        )
         assertTrue(cancels.isEmpty() && deletes.isEmpty() && maxWorkerCalls.isEmpty(), "Rejected POSTs must not reach the backend.")
 
         val (sameOriginCode, sameOriginBody) = rawPost(port, "/session/cancel", "id=sess-q1", mapOf("Sec-Fetch-Site" to "same-origin"))
         assertEquals(303, sameOriginCode, "Expected a same-origin POST to proceed; body:\n$sameOriginBody")
         assertEquals(listOf("sess-q1" to "Cancelled from the management UI"), cancels.toList())
+        val (noneCode, noneBody) = rawPost(port, "/workers/max", "maxWorkers=2", mapOf("Sec-Fetch-Site" to "none"))
+        assertEquals(303, noneCode, "A user-initiated POST labelled none must proceed; body:\n$noneBody")
+        val (missingCode, missingBody) = rawPost(port, "/session/delete", "id=sess-c1", emptyMap())
+        assertEquals(303, missingCode, "A client without Sec-Fetch-Site must proceed; body:\n$missingBody")
+        assertEquals(listOf(2), maxWorkerCalls.toList())
+        assertEquals(listOf("sess-c1"), deletes.toList())
     } finally {
         server.stop()
     }

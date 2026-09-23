@@ -63,6 +63,8 @@ fun fixtureMainAnnouncesBoundEndpointTest() {
             1, endpointLines.size,
             "The fixture main must print exactly one SCREENSHOTTEST_ENDPOINT line, but stdout was:\n${stdout.joinToString("\n")}",
         )
+        assertEquals(0, stdout.indexOf(endpointLines.single()), "The bound endpoint announcement must be the first stdout line: $stdout")
+        assertEquals(1, stdout.indexOf("SCREENSHOTTEST_ENDPOINTS_COMPLETE"), "The completion marker must immediately follow the endpoint announcement: $stdout")
         val match = assertNotNull(
             Regex("""SCREENSHOTTEST_ENDPOINT \{"host":"127\.0\.0\.1","port":([1-9][0-9]*)}""").matchEntire(endpointLines.single()),
             "The fixture main must announce its bound IPv4 loopback endpoint, but printed '${endpointLines.single()}'.",

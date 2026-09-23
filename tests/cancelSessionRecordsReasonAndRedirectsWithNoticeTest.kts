@@ -23,6 +23,8 @@ import kotlin.test.*
 import java.net.HttpURLConnection
 import java.net.URL
 import screenshottest.api.ScreenshotTestApi
+import org.json.JSONArray
+import org.json.JSONObject
 
 /**
  * POST /session/cancel forwards (id, reason) to cancelSession exactly once, then redirects 303 to the
@@ -51,11 +53,23 @@ fun cancelSessionRecordsReasonAndRedirectsWithNoticeTest() {
         override fun startRender(sessionId: String) = throw UnsupportedOperationException()
         override fun getResultsJson(sessionId: String): String = throw UnsupportedOperationException()
         override fun getImageChunk(sessionId: String, key: String, kind: String, offset: Long, length: Int): ByteArray? = throw UnsupportedOperationException()
-        override fun getSessionStatus(sessionId: String): String = when (sessionId) {
+        override fun getSessionStatus(sessionId: String): String = cancels.lastOrNull { it.first == sessionId }?.let { (_, reason) ->
+            JSONObject().put("sessionId", sessionId).put("state", "FAILED")
+                .put("error", "Cancelled before rendering started: $reason").toString()
+        } ?: when (sessionId) {
             "sess-q1" -> """{"sessionId":"sess-q1","state":"RUNNING","error":null,"rendererVersion":"chromium-1228","queuePosition":0,"startedAt":null,"finishedAt":null}"""
             else -> throw IllegalArgumentException("No screenshot session with id '$sessionId'.")
         }
-        override fun listSessions(): String = sessionsJson
+        override fun listSessions(): String {
+            val source = JSONArray(sessionsJson)
+            for (i in 0 until source.length()) {
+                val session = source.getJSONObject(i)
+                if (cancels.any { it.first == session.optString("sessionId") }) {
+                    session.put("state", "FAILED").put("queuePosition", JSONObject.NULL)
+                }
+            }
+            return source.toString()
+        }
         override fun deleteSession(sessionId: String) {
             if (sessionId == "sess-r1") throw IllegalStateException("Session 'sess-r1' is RUNNING; cancel it before deleting it.")
             deletes.add(sessionId)
@@ -105,7 +119,7 @@ fun cancelSessionRecordsReasonAndRedirectsWithNoticeTest() {
 
         val (code, workersHtml) = get(port, "/workers?notice=cancelled&noticeId=sess-q2")
         assertEquals(200, code, "Expected the redirect target to render; body:\n$workersHtml")
-        val notice = """<div class="banner banner-notice" role="status"><span class="banner-label">Done</span><span class="banner-text">Cancelled session sess-q2. It is now FAILED with the cancellation reason recorded as its error.</span><button type="button" class="banner-dismiss" aria-label="Dismiss" title="Dismiss" onclick="this.parentNode.parentNode.removeChild(this.parentNode)">&times;</button></div>"""
+        val notice = """<div class="banner banner-notice" role="status"><span class="banner-label">Done</span><span class="banner-text">Session sess-q2 is FAILED: Cancelled before rendering started: Superseded by a newer run</span><button type="button" class="banner-dismiss" aria-label="Dismiss" title="Dismiss" onclick="this.parentNode.parentNode.removeChild(this.parentNode)">&times;</button></div>"""
         assertTrue(workersHtml.contains(notice), "Expected the composed cancel notice banner:\n$notice\npage was:\n$workersHtml")
 
         // From the list with a blank reason -> the default reason is recorded.
@@ -124,7 +138,13 @@ fun cancelSessionRecordsReasonAndRedirectsWithNoticeTest() {
         val elsewhere = post(port, "/session/cancel", "id=sess-q1&returnTo=https%3A%2F%2Fexample.com%2F")
         assertEquals(303, elsewhere.responseCode)
         assertEquals("/?notice=cancelled&noticeId=sess-q1", elsewhere.getHeaderField("Location"))
-        assertEquals(4, cancels.size, "Expected exactly one backend cancel per POST.")
+        val protocolRelative = post(port, "/session/cancel", "id=sess-q1&returnTo=%2F%2Fexternal.example")
+        assertEquals(303, protocolRelative.responseCode)
+        assertEquals("/?notice=cancelled&noticeId=sess-q1", protocolRelative.getHeaderField("Location"))
+        val unknown = post(port, "/session/cancel", "id=sess-q1&returnTo=elsewhere")
+        assertEquals(303, unknown.responseCode)
+        assertEquals("/?notice=cancelled&noticeId=sess-q1", unknown.getHeaderField("Location"))
+        assertEquals(6, cancels.size, "Expected exactly one backend cancel per POST.")
     } finally {
         server.stop()
     }

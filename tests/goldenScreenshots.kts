@@ -350,6 +350,9 @@ fun goldenScreenshots() {
             )
             val keyResults = results.getJSONArray("results")
             assertTrue(keyResults.length() > 0, "results.json contained no per-key results")
+            val expectedKeys = setOf("sessions-list", "session-detail", "session-detail.results-table", "session-detail-queued", "workers")
+            val actualKeys = (0 until keyResults.length()).map { keyResults.getJSONObject(it).getString("key") }.toSet()
+            assertEquals(expectedKeys, actualKeys, "The golden run must return exactly the five captured page keys")
 
             if (record) {
                 screenshotsDir.mkdirs()

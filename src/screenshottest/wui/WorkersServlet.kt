@@ -24,9 +24,9 @@ class WorkersServlet : HttpServlet() {
         val api = servletContext.getScreenshotTestApi()
         val clock = servletContext.getScreenshotTestClock()
         val page = renderWorkersPage(
-            api, clock.currentTimeMillis(),
-            noticeBanner(req.getParameter("notice"), req.getParameter("noticeId")),
+            api, clock.currentTimeMillis(), null,
             autoRefresh = req.getParameter("refresh") != "0",
+            noticeCode = req.getParameter("notice"), noticeId = req.getParameter("noticeId"),
         )
         resp.contentType = "text/html; charset=UTF-8"
         resp.status = page.status
@@ -47,15 +47,24 @@ fun renderWorkersPage(
     banner: Banner?,
     autoRefresh: Boolean,
     maxWorkersInput: String? = null,
+    noticeCode: String? = null,
+    noticeId: String? = null,
 ): PageResult {
     val pool: JSONObject
+    val sessions: JSONArray
     val sessionsById = HashMap<String, JSONObject>()
     try {
         pool = JSONObject(api.getWorkerPoolStatus())
-        val sessions = JSONArray(api.listSessions())
+        val neededIds = HashSet<String>()
+        for (field in listOf("running", "queued")) {
+            val ids = pool.optJSONArray(field) ?: JSONArray()
+            for (i in 0 until ids.length()) neededIds.add(ids.getString(i))
+        }
+        sessions = JSONArray(api.listSessions())
         for (i in 0 until sessions.length()) {
             val s = sessions.getJSONObject(i)
-            sessionsById[s.optString("sessionId", "")] = s
+            val id = s.optString("sessionId", "")
+            if (id in neededIds) sessionsById[id] = s
         }
     } catch (e: Exception) {
         return PageResult(
@@ -69,6 +78,15 @@ fun renderWorkersPage(
     val queuedSessions = pool.optInt("queuedSessions", 0)
     val running = pool.optJSONArray("running") ?: JSONArray()
     val queued = pool.optJSONArray("queued") ?: JSONArray()
+    val liveBanner = if (banner != null) banner else try {
+        when (noticeCode) {
+            NOTICE_MAX_WORKERS_SET -> noticeBanner(noticeCode, noticeId, poolSize = maxWorkers)
+            else -> sessionNoticeBanner(api, sessions, noticeCode, noticeId)
+        }
+    } catch (e: Exception) {
+        return PageResult(HttpServletResponse.SC_BAD_GATEWAY,
+            errorPage("Failed to verify the worker pool notice: ${escapeHtml(e.message ?: e.javaClass.name)}"))
+    }
 
     // Meta refresh targets the clean URL, so a post-action notice is shown once, not on every reload.
     val extraHead = if (autoRefresh) "\n<meta http-equiv=\"refresh\" content=\"$WORKERS_REFRESH_SECONDS;url=/workers\">" else ""
@@ -76,7 +94,7 @@ fun renderWorkersPage(
     val html = buildString {
         append(pageHeader("ScreenshotTest - Workers", extraHead))
         append("<div class=\"container\">")
-        if (banner != null) append(bannerHtml(banner))
+        if (liveBanner != null) append(bannerHtml(liveBanner))
         append("<h1>Render Workers</h1>")
         append("<p class=\"subtitle\">Sessions render in parallel on a bounded pool of workers; the rest wait in the queue below in the order they will be served.</p>")
         if (autoRefresh) {

@@ -29,6 +29,9 @@ fun actionProviderFailureReturns502Test() {
             "/session/cancel" to "id=sess-1",
             "/session/delete" to "id=sess-1",
             "/workers/max" to "maxWorkers=3",
+            "/session/cancel" to "",
+            "/session/delete" to "",
+            "/workers/max" to "maxWorkers=invalid",
         )) {
             val conn = URL("http://localhost:$port$path").openConnection() as HttpURLConnection
             conn.requestMethod = "POST"
@@ -36,6 +39,12 @@ fun actionProviderFailureReturns502Test() {
             conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded")
             conn.outputStream.use { it.write(form.toByteArray()) }
             assertEquals(502, conn.responseCode, "A provider failure for $path must return 502")
+            val body = conn.errorStream.bufferedReader().readText()
+            assertTrue(body.contains("connection failed"), "The provider's full message must appear in the page: $body")
+        }
+        for (path in listOf("/", "/workers", "/session?id=sess-1")) {
+            val conn = URL("http://localhost:$port$path").openConnection() as HttpURLConnection
+            assertEquals(502, conn.responseCode, "A provider failure while loading $path must return 502")
             val body = conn.errorStream.bufferedReader().readText()
             assertTrue(body.contains("connection failed"), "The provider's full message must appear in the page: $body")
         }

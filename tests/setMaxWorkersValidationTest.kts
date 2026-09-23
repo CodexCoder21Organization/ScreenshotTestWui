@@ -40,6 +40,7 @@ fun setMaxWorkersValidationTest() {
         ]
     """.trimIndent()
     var poolSize = 3
+    var poolAvailable = true
     val cancels = java.util.Collections.synchronizedList(mutableListOf<Pair<String, String>>())
     val deletes = java.util.Collections.synchronizedList(mutableListOf<String>())
     val maxWorkerCalls = java.util.Collections.synchronizedList(mutableListOf<Int>())
@@ -60,9 +61,17 @@ fun setMaxWorkersValidationTest() {
             if (sessionId == "sess-r1") throw IllegalStateException("Session 'sess-r1' is RUNNING; cancel it before deleting it.")
             deletes.add(sessionId)
         }
-        override fun getWorkerPoolStatus(): String = """{"maxWorkers":$poolSize,"activeWorkers":1,"queuedSessions":2,"running":["sess-r1"],"queued":["sess-q1","sess-q2"]}"""
+        override fun getWorkerPoolStatus(): String {
+            if (!poolAvailable) throw RuntimeException("Pool status could not be loaded.")
+            return """{"maxWorkers":$poolSize,"activeWorkers":1,"queuedSessions":2,"running":["sess-r1"],"queued":["sess-q1","sess-q2"]}"""
+        }
         override fun setMaxWorkers(maxWorkers: Int) {
             require(maxWorkers in 1..16) { "maxWorkers must be between 1 and 16, but was $maxWorkers." }
+            if (maxWorkers == 7) throw RuntimeException("Pool controller did not accept size 7.")
+            if (maxWorkers == 8) {
+                poolAvailable = false
+                throw RuntimeException("Pool controller did not accept size 8.")
+            }
             maxWorkerCalls.add(maxWorkers)
             poolSize = maxWorkers
         }
@@ -120,6 +129,17 @@ fun setMaxWorkersValidationTest() {
         val zero = post(port, "/workers/max", "maxWorkers=0")
         assertEquals(400, zero.responseCode)
         assertTrue(bodyOf(zero).contains("""<span class="banner-text">The screenshot service rejected max workers 0: maxWorkers must be between 1 and 16, but was 0.</span>"""))
+        val backendFailure = post(port, "/workers/max", "maxWorkers=7")
+        assertEquals(502, backendFailure.responseCode)
+        val backendFailureHtml = bodyOf(backendFailure)
+        assertTrue(backendFailureHtml.contains("""<span class="banner-text">The screenshot service failed to set max workers to 7: Pool controller did not accept size 7.</span>"""), "Expected the complete service message: $backendFailureHtml")
+        assertTrue(backendFailureHtml.contains("""<h1>Render Workers</h1>"""), "The failed action must re-render the workers page: $backendFailureHtml")
+        val doubleFailure = post(port, "/workers/max", "maxWorkers=8")
+        assertEquals(502, doubleFailure.responseCode)
+        val doubleFailureHtml = bodyOf(doubleFailure)
+        assertTrue(doubleFailureHtml.contains("Pool controller did not accept size 8."), "The action message must remain visible: $doubleFailureHtml")
+        assertTrue(doubleFailureHtml.contains("Pool status could not be loaded."), "The page failure must be visible: $doubleFailureHtml")
+        poolAvailable = true
         assertFalse(outOfRangeHtml.contains("http-equiv=\"refresh\""), "An error page must not auto-refresh the error away.")
 
         val nonNumeric = post(port, "/workers/max", "maxWorkers=four")

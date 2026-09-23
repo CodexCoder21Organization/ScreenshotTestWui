@@ -23,6 +23,7 @@ import kotlin.test.*
 import java.net.HttpURLConnection
 import java.net.URL
 import screenshottest.api.ScreenshotTestApi
+import org.json.JSONArray
 
 /**
  * POST /session/delete deletes the session and redirects 303 with an enumerated notice; deleting from
@@ -55,9 +56,19 @@ fun deleteSessionRedirectsWithNoticeTest() {
             "sess-q1" -> """{"sessionId":"sess-q1","state":"RUNNING","error":null,"rendererVersion":"chromium-1228","queuePosition":0,"startedAt":null,"finishedAt":null}"""
             else -> throw IllegalArgumentException("No screenshot session with id '$sessionId'.")
         }
-        override fun listSessions(): String = sessionsJson
+        override fun listSessions(): String {
+            val source = JSONArray(sessionsJson)
+            val visible = JSONArray()
+            for (i in 0 until source.length()) {
+                val session = source.getJSONObject(i)
+                if (session.getString("sessionId") !in deletes) visible.put(session)
+            }
+            return visible.toString()
+        }
         override fun deleteSession(sessionId: String) {
             if (sessionId == "sess-r1") throw IllegalStateException("Session 'sess-r1' is RUNNING; cancel it before deleting it.")
+            if (sessionId == "sess-unknown") throw IllegalArgumentException("No screenshot session with id 'sess-unknown'.")
+            if (sessionId == "sess-boom") throw RuntimeException("Service request failed while deleting 'sess-boom'.")
             deletes.add(sessionId)
         }
         override fun getWorkerPoolStatus(): String = poolJson
@@ -105,7 +116,7 @@ fun deleteSessionRedirectsWithNoticeTest() {
         val (code, html) = get(port, "/?notice=deleted&noticeId=sess-c1")
         assertEquals(200, code)
         assertTrue(
-            html.contains("""<span class="banner-text">Deleted session sess-c1 and its stored screenshots.</span>"""),
+            html.contains("""<span class="banner-text">Session sess-c1 is no longer listed by the service.</span>"""),
             "Expected the composed delete notice; page was:\n$html"
         )
 
@@ -114,13 +125,25 @@ fun deleteSessionRedirectsWithNoticeTest() {
         assertEquals("/workers?notice=deleted&noticeId=sess-f1", fromWorkers.getHeaderField("Location"))
         assertEquals(listOf("sess-c1", "sess-f1"), deletes.toList())
 
+        val alreadyAbsent = post(port, "/session/delete", "id=sess-already-absent&returnTo=list")
+        assertEquals(303, alreadyAbsent.responseCode, "Idempotent deletion of an absent id succeeds")
+        val (absentCode, absentPage) = get(port, alreadyAbsent.getHeaderField("Location"))
+        assertEquals(200, absentCode)
+        assertTrue(absentPage.contains("Session sess-already-absent is no longer listed by the service."), "The notice must describe only verified current state: $absentPage")
+
         val refused = post(port, "/session/delete", "id=sess-r1&returnTo=list")
         assertEquals(409, refused.responseCode, "Expected 409 when the service refuses to delete a RUNNING session.")
         assertTrue(
             bodyOf(refused).contains("""<span class="banner-text">Could not delete session &#39;sess-r1&#39;: Session &#39;sess-r1&#39; is RUNNING; cancel it before deleting it.</span>"""),
             "Expected the service's refusal in an error banner."
         )
-        assertEquals(listOf("sess-c1", "sess-f1"), deletes.toList(), "A refused delete must not be recorded.")
+        assertEquals(listOf("sess-c1", "sess-f1", "sess-already-absent"), deletes.toList(), "A refused delete must not be recorded.")
+        val unknown = post(port, "/session/delete", "id=sess-unknown&returnTo=list")
+        assertEquals(404, unknown.responseCode)
+        assertTrue(bodyOf(unknown).contains("""<span class="banner-text">Could not delete session &#39;sess-unknown&#39;: No screenshot session with id &#39;sess-unknown&#39;.</span>"""))
+        val backendFailure = post(port, "/session/delete", "id=sess-boom&returnTo=list")
+        assertEquals(502, backendFailure.responseCode)
+        assertTrue(bodyOf(backendFailure).contains("""<span class="banner-text">The screenshot service failed to delete session &#39;sess-boom&#39;: Service request failed while deleting &#39;sess-boom&#39;.</span>"""))
     } finally {
         server.stop()
     }

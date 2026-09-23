@@ -4,6 +4,7 @@ import jakarta.servlet.http.HttpServlet
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
 import org.json.JSONObject
+import org.json.JSONArray
 import screenshottest.api.ScreenshotTestApi
 
 /**
@@ -26,8 +27,8 @@ class SessionDetailServlet : HttpServlet() {
         val api = servletContext.getScreenshotTestApi()
         val clock = servletContext.getScreenshotTestClock()
         val page = renderSessionDetailPage(
-            api, clock.currentTimeMillis(), id,
-            noticeBanner(req.getParameter("notice"), req.getParameter("noticeId")),
+            api, clock.currentTimeMillis(), id, null,
+            req.getParameter("notice"), req.getParameter("noticeId"),
         )
         resp.status = page.status
         resp.writer.write(page.html)
@@ -38,7 +39,10 @@ class SessionDetailServlet : HttpServlet() {
  * Renders session [id]'s detail page with an optional [banner]. A session the service cannot load
  * yields a `404` error page that still carries [banner].
  */
-fun renderSessionDetailPage(api: ScreenshotTestApi, nowMs: Long, id: String, banner: Banner?): PageResult {
+fun renderSessionDetailPage(
+    api: ScreenshotTestApi, nowMs: Long, id: String, banner: Banner?,
+    noticeCode: String? = null, noticeId: String? = null,
+): PageResult {
     val status: JSONObject = try {
         JSONObject(api.getSessionStatus(id))
     } catch (e: Exception) {
@@ -55,6 +59,25 @@ fun renderSessionDetailPage(api: ScreenshotTestApi, nowMs: Long, id: String, ban
     val startedAt = status.optNullableEpochMs("startedAt")
     val finishedAt = status.optNullableEpochMs("finishedAt")
     val phase = sessionPhase(state, queuePosition)
+    val createdAt = if (queuePosition != null) try {
+        val recent = JSONArray(api.listSessions())
+        var found = 0L
+        for (i in 0 until recent.length()) {
+            val summary = recent.getJSONObject(i)
+            if (summary.optString("sessionId") == id) {
+                found = summary.optLong("createdAt", 0L)
+                break
+            }
+        }
+        found
+    } catch (e: Exception) {
+        return PageResult(HttpServletResponse.SC_BAD_GATEWAY,
+            errorPage("Failed to load the creation time for queued session \"${escapeHtml(id)}\": ${escapeHtml(e.message ?: e.javaClass.name)}", banner))
+    } else 0L
+    val liveBanner = banner ?: noticeBanner(noticeCode, noticeId, sessionStatus = status, isListed = noticeId == id)
+    val durationHtml = if (queuePosition != null && createdAt <= 0L) {
+        "<span title=\"Duration: waiting for a render worker; the creation time is unavailable.\" tabindex=\"0\">-</span>"
+    } else durationCellHtml(createdAt, startedAt, finishedAt, queuePosition != null, nowMs)
 
     // Results (verdicts + measurements + images) only exist once the render is COMPLETED.
     var results: JSONObject? = null
@@ -72,7 +95,7 @@ fun renderSessionDetailPage(api: ScreenshotTestApi, nowMs: Long, id: String, ban
         // pageHeader escapes the whole title, so pass the raw id (escaping it here would double-escape).
         append(pageHeader("ScreenshotTest - Session $id"))
         append("<div class=\"container\">")
-        if (banner != null) append(bannerHtml(banner))
+        if (liveBanner != null) append(bannerHtml(liveBanner))
         append("<p><a href=\"/\">&larr; All sessions</a></p>")
         append("<h1 class=\"mono\">${escapeHtml(id)}</h1>")
 
@@ -87,7 +110,7 @@ fun renderSessionDetailPage(api: ScreenshotTestApi, nowMs: Long, id: String, ban
         append("<div class=\"info-grid\" id=\"timing\">")
         append(infoCardRaw("Started", timestampHtml(startedAt, "Not started yet")))
         append(infoCardRaw("Finished", timestampHtml(finishedAt, "Not finished yet")))
-        append(infoCard("Duration", durationCellHtml(0L, startedAt, finishedAt, false, nowMs)))
+        append(infoCard("Duration", durationHtml))
         append("</div>")
 
         if (error.isNotBlank()) {
@@ -136,7 +159,7 @@ private fun appendSessionActions(sb: StringBuilder, id: String, state: String) {
         sb.append("<input type=\"hidden\" name=\"id\" value=\"${escapeHtml(id)}\">")
         sb.append("<input type=\"hidden\" name=\"returnTo\" value=\"${ReturnTarget.SESSION.formValue}\">")
         sb.append("<label for=\"cancel-reason\">Reason</label>")
-        sb.append("<input id=\"cancel-reason\" class=\"text-input\" type=\"text\" name=\"reason\" size=\"48\" value=\"${escapeHtml(DEFAULT_CANCEL_REASON)}\">")
+        sb.append("<input id=\"cancel-reason\" class=\"text-input\" type=\"text\" name=\"reason\" size=\"48\" maxlength=\"$MAX_CANCEL_REASON_LENGTH\" value=\"${escapeHtml(DEFAULT_CANCEL_REASON)}\">")
         sb.append("<button type=\"submit\" class=\"btn btn-danger\">Cancel session</button>")
         sb.append("</form>")
         sb.append("<div class=\"form-caption\">A queued session is dropped before it starts; a rendering one is stopped. Either way it becomes FAILED with this reason recorded as its error.</div>")

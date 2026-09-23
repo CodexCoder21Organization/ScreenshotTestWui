@@ -42,6 +42,10 @@ fun sessionDetailShowsPhaseTimingAndActionsTest() {
             "sess-q" -> """{"sessionId":"sess-q","state":"RUNNING","error":null,"rendererVersion":"chromium-1228","queuePosition":2,"startedAt":null,"finishedAt":null}"""
             "sess-q-absent" -> """{"sessionId":"sess-q-absent","state":"RUNNING","error":null,"rendererVersion":"chromium-1228","queuePosition":0,"startedAt":null,"finishedAt":null}"""
             "sess-c" -> """{"sessionId":"sess-c","state":"COMPLETED","error":null,"rendererVersion":"chromium-1228","queuePosition":null,"startedAt":1735686000000,"finishedAt":1735686090000}"""
+            "sess-r" -> """{"sessionId":"sess-r","state":"RUNNING","error":null,"rendererVersion":"chromium-1228","queuePosition":null,"startedAt":1735689475000,"finishedAt":null}"""
+            "sess-f" -> """{"sessionId":"sess-f","state":"FAILED","error":"Worker failed.","rendererVersion":"chromium-1228","queuePosition":null,"startedAt":1735686000000,"finishedAt":1735686090000}"""
+            "sess-p" -> """{"sessionId":"sess-p","state":"PENDING","error":null,"rendererVersion":"chromium-1228","queuePosition":null,"startedAt":null,"finishedAt":null}"""
+            "sess-u" -> """{"sessionId":"sess-u","state":"UPLOADING","error":null,"rendererVersion":"chromium-1228","queuePosition":null,"startedAt":null,"finishedAt":null}"""
             else -> throw IllegalArgumentException("No screenshot session with id '$sessionId'.")
         }
         override fun listSessions(): String = """[{"sessionId":"sess-q","createdAt":1735689480000}]"""
@@ -92,7 +96,7 @@ fun sessionDetailShowsPhaseTimingAndActionsTest() {
         val (absentCode, absent) = get(port, "/session?id=sess-q-absent")
         assertEquals(200, absentCode)
         assertTrue(absent.contains("the creation time is unavailable"), "A queued session outside the recent list needs an explanatory tooltip; page was:\n$absent")
-        val cancelPanel = """<div class="panel" id="session-actions"><h2>Cancel this session</h2><form method="post" action="/session/cancel" class="form-row"><input type="hidden" name="id" value="sess-q"><input type="hidden" name="returnTo" value="session"><label for="cancel-reason">Reason</label><input id="cancel-reason" class="text-input" type="text" name="reason" size="48" value="Cancelled from the management UI"><button type="submit" class="btn btn-danger">Cancel session</button></form>"""
+        val cancelPanel = """<div class="panel" id="session-actions"><h2>Cancel this session</h2><form method="post" action="/session/cancel" class="form-row"><input type="hidden" name="id" value="sess-q"><input type="hidden" name="returnTo" value="session"><label for="cancel-reason">Reason</label><input id="cancel-reason" class="text-input" type="text" name="reason" size="48" maxlength="512" value="Cancelled from the management UI"><button type="submit" class="btn btn-danger">Cancel session</button></form>"""
         assertTrue(queued.contains(cancelPanel), "Expected the Cancel panel:\n$cancelPanel\npage was:\n$queued")
         assertFalse(queued.contains("/session/delete"), "A RUNNING session must not offer Delete.")
 
@@ -111,6 +115,20 @@ fun sessionDetailShowsPhaseTimingAndActionsTest() {
             "Expected the Delete panel returning to the list; page was:\n$completed"
         )
         assertFalse(completed.contains("/session/cancel"), "A COMPLETED session must not offer Cancel.")
+        val (rCode, rendering) = get(port, "/session?id=sess-r")
+        assertEquals(200, rCode)
+        assertTrue(rendering.contains("running for 2m 05s"), "A rendering detail must show live duration: $rendering")
+        val (fCode, failed) = get(port, "/session?id=sess-f")
+        assertEquals(200, fCode)
+        assertTrue(failed.contains("1m 30s"), "A failed render with both instants must show elapsed render time: $failed")
+        assertTrue(failed.contains("Worker failed."), "A failed detail must show its error: $failed")
+        for ((id, state) in listOf("sess-p" to "PENDING", "sess-u" to "UPLOADING")) {
+            val (code, page) = get(port, "/session?id=$id")
+            assertEquals(200, code)
+            assertTrue(page.contains(">$state</span>"), "Expected $state state: $page")
+            assertTrue(page.contains("Duration: this session has not started rendering."), "Expected an unstarted duration: $page")
+            assertFalse(page.contains("id=\"session-actions\""), "No management action is available for $state: $page")
+        }
     } finally {
         server.stop()
     }

@@ -53,6 +53,7 @@ fun noticeSelectorNeverRendersRequestTextTest() {
         override fun getImageChunk(sessionId: String, key: String, kind: String, offset: Long, length: Int): ByteArray? = throw UnsupportedOperationException()
         override fun getSessionStatus(sessionId: String): String = when (sessionId) {
             "sess-q1" -> """{"sessionId":"sess-q1","state":"RUNNING","error":null,"rendererVersion":"chromium-1228","queuePosition":0,"startedAt":null,"finishedAt":null}"""
+            "sess-f1" -> """{"sessionId":"sess-f1","state":"FAILED","error":"Worker stopped unexpectedly.","rendererVersion":"chromium-1228","queuePosition":null,"startedAt":null,"finishedAt":1735682400000}"""
             else -> throw IllegalArgumentException("No screenshot session with id '$sessionId'.")
         }
         override fun listSessions(): String = sessionsJson
@@ -119,6 +120,9 @@ fun noticeSelectorNeverRendersRequestTextTest() {
         val (codeQueued, queued) = get(port, "/session?id=sess-q1&notice=cancelled&noticeId=sess-q1")
         assertEquals(200, codeQueued)
         assertFalse(queued.contains("class=\"banner "), "A still-queued session must not be described as cancelled.")
+        val (codeFailed, failed) = get(port, "/?notice=cancelled&noticeId=sess-f1")
+        assertEquals(200, codeFailed)
+        assertFalse(failed.contains("class=\"banner "), "An unrelated failure must not be described as a cancellation.")
 
         val (codeListed, listed) = get(port, "/?notice=deleted&noticeId=sess-c1")
         assertEquals(200, codeListed)

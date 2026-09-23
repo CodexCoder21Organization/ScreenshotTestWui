@@ -25,7 +25,9 @@ and serves:
 - **`/session?id=<id>`** — one session's detail: its state, phase, queue position, started / finished
   instants and duration, the action its state allows (Cancel with an editable reason, or Delete), the
   per-key verdict table (key, verdict, diff pixels / total, max channel delta, golden & actual
-  dimensions), and, for each captured key, inline `actual` / `golden` / `diff` thumbnails.
+  dimensions), and, for each captured key, inline `actual` / `golden` / `diff` thumbnails. For a queued
+  session, its waiting duration comes from the recent sessions list; if it is no longer listed, the
+  duration shows `-` with an explanation that the creation time is unavailable.
 - **`/image?id=<id>&key=<key>&kind=<actual|golden|diff>`** — streams the PNG for one image key,
   pulled from the service in bounded chunks and written straight to the response so the WUI never
   buffers a whole image in its `-Xmx128m` heap.
@@ -37,17 +39,25 @@ The actions are plain HTML form POSTs, so they work without JavaScript:
 
 | Action | Form | Allowed for | Service call |
 |---|---|---|---|
-| Cancel | `POST /session/cancel` — `id`, `reason` (defaults to "Cancelled from the management UI"), `returnTo` | `RUNNING` sessions, queued or rendering | `cancelSession(id, reason)` — the session becomes `FAILED` with "Cancelled before rendering started: …" or "Cancelled while rendering: …" |
+| Cancel | `POST /session/cancel` — `id`, `reason` (defaults to "Cancelled from the management UI"; at most 512 characters), `returnTo` | `RUNNING` sessions, queued or rendering | `cancelSession(id, reason)` — the session becomes `FAILED` with "Cancelled before rendering started: …" or "Cancelled while rendering: …" |
 | Delete | `POST /session/delete` — `id`, `returnTo` | `COMPLETED` / `FAILED` sessions | `deleteSession(id)` |
 | Set pool size | `POST /workers/max` — `maxWorkers` | — | `setMaxWorkers(n)`; the service enforces the allowed range |
 
 On success the WUI answers `303 See Other` back to the page named by `returnTo` (`list`, `workers`, or
 `session`; deleting from a session's own page returns to the list), which shows a dismissible
-confirmation banner. The redirect carries only an enumerated `notice` code and the session id — the
-page composes the words itself, so a crafted link cannot make it display arbitrary text. On failure
+status banner. The redirect carries only an enumerated `notice` code and an id or requested pool size.
+The page checks current service data before showing a banner: the current pool size must match, a
+cancelled session must be FAILED with its recorded cancellation error, and a deleted session must no
+longer be listed. An unmatched selector shows no banner. Deleting an already absent session is
+idempotent in the service, so it may still return `303`; the banner says only that it is no longer
+listed. On failure
 the originating page is rendered directly with an error banner holding the service's full message:
-`400` for a missing or malformed field or a value the service rejects, `404` for an unknown session,
-`409` for a session whose state does not allow the action, and `502` for any other backend failure.
+`400` for a missing or malformed field or a locally typed value rejection, `404` for a typed unknown
+session, `409` for a typed wrong-state response, and `502` for a connection or other backend failure.
+The currently pinned UrlResolver wraps exceptions raised inside the remote service as
+`SandboxException` without a structured remote exception type, so those remote validation and state
+errors currently use `502` while still showing the full service message. This transport limitation
+needs a typed exception field before the WUI can distinguish them reliably.
 A POST that the browser labels as coming from another site (`Sec-Fetch-Site: cross-site` or
 `same-site`) is refused with `403`.
 

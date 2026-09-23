@@ -1,6 +1,8 @@
 package screenshottest.wui
 
+import org.json.JSONArray
 import org.json.JSONObject
+import screenshottest.api.ScreenshotTestApi
 import java.time.Instant
 import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
@@ -13,6 +15,9 @@ import java.time.format.DateTimeFormatter
 
 /** The reason recorded when a session is cancelled without the operator typing one. */
 const val DEFAULT_CANCEL_REASON = "Cancelled from the management UI"
+
+/** Maximum number of characters accepted from the editable cancellation reason field. */
+const val MAX_CANCEL_REASON_LENGTH = 512
 
 /** An outcome banner shown at the top of a page: a success notice or an error. */
 class Banner(val kind: Kind, val text: String) {
@@ -166,19 +171,43 @@ const val NOTICE_DELETED = "deleted"
 const val NOTICE_MAX_WORKERS_SET = "maxWorkersSet"
 
 /**
- * Composes the success banner for a `?notice=<code>&noticeId=<id>` redirect, or null when the code
- * is absent or unrecognised, or its argument is not a well-formed id / worker count.
+ * Composes a status banner only when the selector agrees with current service data. The URL alone
+ * cannot establish that an action succeeded, so every sentence describes the verified live state.
  */
-fun noticeBanner(code: String?, noticeId: String?): Banner? {
+fun noticeBanner(
+    code: String?, noticeId: String?, poolSize: Int? = null,
+    sessionStatus: JSONObject? = null, isListed: Boolean? = null,
+): Banner? {
     return when (code) {
         NOTICE_CANCELLED -> noticeId?.takeIf { NOTICE_ID_PATTERN.matches(it) }
-            ?.let { Banner(Banner.Kind.NOTICE, "Cancelled session $it. It is now FAILED with the cancellation reason recorded as its error.") }
+            ?.takeIf { isListed == true && sessionStatus?.optString("sessionId") == it && sessionStatus?.optString("state") == "FAILED" }
+            ?.let { id ->
+                val error = sessionStatus?.optString("error", "") ?: ""
+                if (error.startsWith("Cancelled ")) Banner(Banner.Kind.NOTICE, "Session $id is FAILED: $error") else null
+            }
         NOTICE_DELETED -> noticeId?.takeIf { NOTICE_ID_PATTERN.matches(it) }
-            ?.let { Banner(Banner.Kind.NOTICE, "Deleted session $it and its stored screenshots.") }
+            ?.takeIf { isListed == false }
+            ?.let { Banner(Banner.Kind.NOTICE, "Session $it is no longer listed by the service.") }
         NOTICE_MAX_WORKERS_SET -> noticeId?.toIntOrNull()?.takeIf { it > 0 }
-            ?.let { Banner(Banner.Kind.NOTICE, "Set the render worker pool to at most $it concurrent session${if (it == 1) "" else "s"}.") }
+            ?.takeIf { it == poolSize }
+            ?.let { Banner(Banner.Kind.NOTICE, "Pool size is now $it.") }
         else -> null
     }
+}
+
+/** Resolves a session notice against the current summary list and, for cancellation, its status. */
+internal fun sessionNoticeBanner(api: ScreenshotTestApi, sessions: JSONArray, code: String?, noticeId: String?): Banner? {
+    if (code != NOTICE_CANCELLED && code != NOTICE_DELETED) return null
+    if (noticeId == null || !NOTICE_ID_PATTERN.matches(noticeId)) return null
+    var listed = false
+    for (i in 0 until sessions.length()) {
+        if (sessions.getJSONObject(i).optString("sessionId") == noticeId) {
+            listed = true
+            break
+        }
+    }
+    val status = if (code == NOTICE_CANCELLED && listed) JSONObject(api.getSessionStatus(noticeId)) else null
+    return noticeBanner(code, noticeId, sessionStatus = status, isListed = listed)
 }
 
 private fun ordinal(n: Int): String {

@@ -38,6 +38,8 @@ fun sessionListShowsPhasesDurationsAndActionsTest() {
           {"sessionId":"sess-r1","label":"rendering one","mode":"compare","state":"RUNNING","createdAt":1735689000000,"rendererVersion":"chromium-1228","queuePosition":null,"startedAt":1735689475000,"finishedAt":null},
           {"sessionId":"sess-c1","label":"completed one","mode":"compare","state":"COMPLETED","createdAt":1735685900000,"rendererVersion":"chromium-1228","queuePosition":null,"startedAt":1735686000000,"finishedAt":1735686090000},
           {"sessionId":"sess-f1","label":"cancelled before start","mode":"compare","state":"FAILED","createdAt":1735682300000,"rendererVersion":"chromium-1228","queuePosition":null,"startedAt":null,"finishedAt":1735682400000}
+          ,{"sessionId":"sess-p1","label":"pending","mode":"record","state":"PENDING","createdAt":1735689500000,"rendererVersion":"chromium-1228","queuePosition":null,"startedAt":null,"finishedAt":null}
+          ,{"sessionId":"sess-u1","label":"uploading","mode":"record","state":"UPLOADING","createdAt":1735689500000,"rendererVersion":"chromium-1228","queuePosition":null,"startedAt":null,"finishedAt":null}
         ]
     """.trimIndent()
     val api: ScreenshotTestApi = object : ScreenshotTestApi {
@@ -115,6 +117,12 @@ fun sessionListShowsPhasesDurationsAndActionsTest() {
             html.contains("""<span title="Duration: this session ended at 2024-12-31 22:00:00 UTC without ever starting to render." tabindex="0">-</span>"""),
             "Expected sess-f1's duration to be '-' with an explanatory tooltip; page was:\n$html"
         )
+        for ((id, state) in listOf("sess-p1" to "PENDING", "sess-u1" to "UPLOADING")) {
+            val row = html.substringAfter("/session?id=$id").substringBefore("</tr>")
+            assertTrue(row.contains(">$state</span>"), "Expected $state state for $id: $row")
+            assertTrue(row.contains("Duration: this session has not started rendering."), "Expected an unstarted duration for $id: $row")
+            assertFalse(row.contains("action=\"/session/"), "No management action is available for $state: $row")
+        }
 
         // Exactly one action per row: 3 Cancel forms (the RUNNING sessions) and 2 Delete forms.
         assertEquals(3, Regex("""action="/session/cancel"""").findAll(html).count(), "Expected a Cancel form for each of the 3 RUNNING sessions only.")
