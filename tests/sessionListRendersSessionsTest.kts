@@ -1,5 +1,5 @@
 @file:WithArtifact("screenshottest.wui.buildMaven()")
-@file:WithArtifact("screenshottest.api:screenshottest-api:0.0.2")
+@file:WithArtifact("screenshottest.api:screenshottest-api:0.0.3")
 @file:WithArtifact("org.eclipse.jetty:jetty-server:11.0.20")
 @file:WithArtifact("org.eclipse.jetty:jetty-servlet:11.0.20")
 @file:WithArtifact("org.eclipse.jetty:jetty-http:11.0.20")

@@ -38,9 +38,9 @@ val dependencies = resolveDependencies2(
     MavenPrebuilt2("community.kotlin.rpc:protocol-api:0.0.2"),
     MavenPrebuilt2("community.kotlin.rpc:protocol-impl:0.0.11"),
     // ScreenshotTest API — the url://screenshottest/ contract this WUI renders and manages.
-    // 0.0.2 adds the worker pool (getWorkerPoolStatus / setMaxWorkers), cancelSession, and the
+    // 0.0.2 added the worker pool (getWorkerPoolStatus / setMaxWorkers), cancelSession, and the
     // queuePosition / startedAt / finishedAt session fields.
-    MavenPrebuilt2("screenshottest.api:screenshottest-api:0.0.2"),
+    MavenPrebuilt2("screenshottest.api:screenshottest-api:0.0.3"),
     // JSON
     MavenPrebuilt2("org.json:json:20250517"),
     // Okio
@@ -120,7 +120,7 @@ fun buildMaven(): File {
         //          time-stable for golden-screenshot capture.
         //        - Dogfoods the ScreenshotTest service via ScreenshotFixtureServer +
         //          tests/goldenScreenshots.kts (its own committed goldens under screenshots/).
-        // 0.0.2: Management UI against screenshottest-api 0.0.2 (bounded render worker pool).
+        // 0.0.2: Management UI against screenshottest-api 0.0.3 (bounded render worker pool, added in api 0.0.2).
         //        - "/" gains phase (Queued #n / Rendering / Completed / Failed), duration, and
         //          per-row Cancel / Delete actions; "/session" gains phase, queue position,
         //          started/finished/duration, and the Cancel / Delete panel.

@@ -18,7 +18,7 @@
 @file:WithArtifact("community.kotlin.clocks.simple:community-kotlin-clocks-simple:0.0.3")
 @file:WithArtifact("community.kotlin.rpc:protocol-api:0.0.2")
 @file:WithArtifact("community.kotlin.rpc:protocol-impl:0.0.11")
-@file:WithArtifact("screenshottest.api:screenshottest-api:0.0.2")
+@file:WithArtifact("screenshottest.api:screenshottest-api:0.0.3")
 @file:WithArtifact("org.json:json:20250517")
 @file:WithArtifact("com.squareup.okio:okio-jvm:3.4.0")
 @file:WithArtifact("org.jetbrains.kotlin:kotlin-stdlib:1.9.22")

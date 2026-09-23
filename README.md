@@ -7,7 +7,7 @@ part of the [ScreenshotTest workstream](https://github.com/CodexCoder21Organizat
 It is a small management web UI (Jetty 11, `org.json`, dark GitHub theme) that connects to
 `url://screenshottest/` as a typed
 [`ScreenshotTestApi`](https://github.com/CodexCoder21Organization/ScreenshotTestApi) proxy
-(`screenshottest.api:screenshottest-api:0.0.2`, the version that added the bounded render worker pool)
+(`screenshottest.api:screenshottest-api:0.0.3`; the worker-pool API arrived in 0.0.2)
 and serves:
 
 - **`/`** — the sessions list: every render session newest-first (id, label, mode, state, created,
