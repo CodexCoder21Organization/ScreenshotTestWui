@@ -2,6 +2,7 @@ package screenshottest.wui
 
 import community.kotlin.clocks.simple.Clock
 import community.kotlin.clocks.simple.ManualClock
+import org.eclipse.jetty.server.NetworkConnector
 import org.json.JSONArray
 import org.json.JSONObject
 import screenshottest.api.ScreenshotTestApi
@@ -21,7 +22,8 @@ import javax.imageio.ImageIO
  * https://github.com/CodexCoder21Organization/PlanRepository/blob/main/workstreams/ScreenshotTest.md).
  *
  * This is the WUI dogfooding its own service: the `url://screenshottest/` runner launches this class's
- * [main] on a worker with `PORT` set, drives the pinned Chromium against `http://127.0.0.1:$PORT`, and
+ * [main] on a worker with `PORT=0`, reads the `SCREENSHOTTEST_ENDPOINT` line [main] prints once it has
+ * bound, drives the pinned Chromium against that announced loopback endpoint, and
  * compares the captured pixels against the goldens committed under `screenshots/`. For that comparison
  * to stay green day after day the rendered bytes must not depend on the wall clock, so:
  *
@@ -369,11 +371,18 @@ private fun buildFixtureApi(): ScreenshotTestApi = object : ScreenshotTestApi {
  */
 fun main() {
     System.setProperty("java.awt.headless", "true")
-    val port = System.getenv("PORT")?.toIntOrNull() ?: 8080
+    val requestedPort = System.getenv("PORT")?.toIntOrNull() ?: 8080
     val clock: Clock = ManualClock(FIXED_NOW_MS)
-    println("Starting ScreenshotTest WUI screenshot fixture on port $port (frozen clock @ $FIXED_NOW_MS)...")
-    val server = createServer(port, buildFixtureApi(), clock)
+    println("Starting ScreenshotTest WUI screenshot fixture on port $requestedPort (frozen clock @ $FIXED_NOW_MS)...")
+    val server = createServer(requestedPort, buildFixtureApi(), clock)
     server.start()
-    println("Fixture WUI running at http://0.0.0.0:$port/")
+    // The screenshottest runner launches this main with PORT=0 and waits for exactly one endpoint
+    // announcement naming the port the operating system actually assigned, followed by the
+    // completion boundary; without these lines the runner never renders against this server.
+    val boundPort = (server.connectors.single() as NetworkConnector).localPort
+    println("SCREENSHOTTEST_ENDPOINT {\"host\":\"127.0.0.1\",\"port\":$boundPort}")
+    println("SCREENSHOTTEST_ENDPOINTS_COMPLETE")
+    System.out.flush()
+    println("Fixture WUI running at http://127.0.0.1:$boundPort/")
     server.join()
 }
