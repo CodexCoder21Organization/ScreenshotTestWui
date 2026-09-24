@@ -169,7 +169,8 @@ val sandboxClientFixtureDependencies = resolveDependencies2(
 
 fun buildSandboxClientFixtureJar(): File {
     val artifact = buildSimpleKotlinMavenArtifact(
-        coordinates = "screenshottest.wui:screenshottest-wui-sandbox-client-fixture:0.0.1",
+        // 0.0.2: forwards the management calls (cancel/delete/setMaxWorkers/listSessions/getWorkerPoolStatus).
+        coordinates = "screenshottest.wui:screenshottest-wui-sandbox-client-fixture:0.0.2",
         src = File("test-fixtures/sandbox-client"),
         compileDependencies = sandboxClientFixtureDependencies
     )
