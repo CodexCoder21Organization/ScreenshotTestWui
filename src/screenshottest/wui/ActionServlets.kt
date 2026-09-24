@@ -117,7 +117,7 @@ class SetMaxWorkersServlet : HttpServlet() {
                     "The screenshot service rejected max workers $value: ${backendFailureMessage(e)}")
             } else {
                 renderWorkersError(resp, HttpServletResponse.SC_BAD_GATEWAY, raw,
-                    "The screenshot service failed to set max workers to $value: ${e.message ?: e.javaClass.name}")
+                    "The screenshot service failed to set max workers to $value: ${backendFailureMessage(e)}")
             }
             return
         }

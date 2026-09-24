@@ -57,8 +57,8 @@ service's full message:
 session, `409` for a typed wrong-state response, and `502` for a connection or other backend failure.
 Through the `url://` client a service failure arrives as a `SandboxException`; the WUI classifies it
 by the exception class the service itself reported (`remoteExceptionClassName`, available from
-[UrlResolver](https://github.com/CodexCoder21Organization/UrlResolver) 0.0.1260 and
-[UrlProtocol](https://github.com/CodexCoder21Organization/UrlProtocol) 0.0.531) and shows the
+[UrlResolver](https://github.com/CodexCoder21Organization/UrlResolver) 0.0.1261 and
+[UrlProtocol](https://github.com/CodexCoder21Organization/UrlProtocol) 0.0.532) and shows the
 service's own message. A failure the service did not report (a connection failure, a timeout, an
 older service build) has no reported class and uses `502`.
 If the WUI cannot establish its API connection while loading `/`, `/workers`, or `/session`, that page

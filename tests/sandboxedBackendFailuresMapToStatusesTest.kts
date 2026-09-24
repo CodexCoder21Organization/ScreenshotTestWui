@@ -1,6 +1,6 @@
 @file:WithArtifact("screenshottest.wui.buildMaven()")
 @file:WithArtifact("screenshottest.api:screenshottest-api:0.0.3")
-@file:WithArtifact("foundation.url:protocol:0.0.531")
+@file:WithArtifact("foundation.url:protocol:0.0.532")
 @file:WithArtifact("org.eclipse.jetty:jetty-server:11.0.20")
 @file:WithArtifact("org.eclipse.jetty:jetty-servlet:11.0.20")
 @file:WithArtifact("org.eclipse.jetty:jetty-http:11.0.20")
@@ -28,9 +28,10 @@ import screenshottest.api.ScreenshotTestApi
 import foundation.url.protocol.sandbox.SandboxException
 
 /**
- * Through the real url:// client every service failure arrives as a SandboxException; the WUI must
- * classify it by the service-reported remoteExceptionClassName (IllegalStateException -> 409,
- * IllegalArgumentException -> 404, none -> 502) and show the service's own message, never the
+ * The url:// client delivers every service failure as a SandboxException; given such exceptions
+ * (built here directly; managementActionsThroughRealSandboxedProviderTest drives the real sandbox),
+ * the WUI must classify by the service-reported remoteExceptionClassName (IllegalStateException ->
+ * 409, IllegalArgumentException -> 404, none -> 502) and show the service's own message, never the
  * sandbox's diagnostic wrapper text.
  */
 fun sandboxedBackendFailuresMapToStatusesTest() {
@@ -78,13 +79,6 @@ fun sandboxedBackendFailuresMapToStatusesTest() {
             cancels.add(sessionId to reason)
         }
     }
-    fun get(port: Int, path: String): Pair<Int, String> {
-        val conn = URL("http://localhost:$port$path").openConnection() as HttpURLConnection
-        conn.instanceFollowRedirects = false
-        val code = conn.responseCode
-        val body = (if (code < 400) conn.inputStream else conn.errorStream).bufferedReader().readText()
-        return code to body
-    }
     fun post(port: Int, path: String, form: String, headers: Map<String, String> = emptyMap()): HttpURLConnection {
         val conn = URL("http://localhost:$port$path").openConnection() as HttpURLConnection
         conn.instanceFollowRedirects = false
@@ -125,6 +119,8 @@ fun sandboxedBackendFailuresMapToStatusesTest() {
             "Expected the backend failure message in a banner."
         )
         assertTrue(cancels.isEmpty(), "No cancel should have been recorded; got $cancels")
+        assertTrue(deletes.isEmpty(), "No delete was requested; got $deletes")
+        assertTrue(maxWorkerCalls.isEmpty(), "No max-workers change was requested; got $maxWorkerCalls")
     } finally {
         server.stop()
     }

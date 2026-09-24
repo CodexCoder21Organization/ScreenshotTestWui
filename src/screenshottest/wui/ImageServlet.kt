@@ -45,7 +45,7 @@ class ImageServlet : HttpServlet() {
             }
             resp.status = HttpServletResponse.SC_INTERNAL_SERVER_ERROR
             resp.contentType = "text/plain; charset=UTF-8"
-            resp.writer.write("Failed to load image for session \"$id\", key \"$key\", kind \"$kind\": ${e.message ?: e.javaClass.name}")
+            resp.writer.write("Failed to load image for session \"$id\", key \"$key\", kind \"$kind\": ${backendFailureMessage(e)}")
             return
         }
         if (first == null || first.isEmpty()) {
