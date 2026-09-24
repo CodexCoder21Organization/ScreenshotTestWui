@@ -38,10 +38,11 @@ class ImageServlet : HttpServlet() {
         // means the key/kind pair produced no image (e.g. golden requested in record mode).
         val first = try {
             api.getImageChunk(id, key, kind, 0L, CHUNK_SIZE)
-        } catch (e: IllegalArgumentException) {
-            notFound(resp, "No image for session \"$id\", key \"$key\", kind \"$kind\": ${e.message}")
-            return
         } catch (e: Exception) {
+            if (classifyBackendFailureKind(e) == BackendFailureKind.REJECTED_ARGUMENT) {
+                notFound(resp, "No image for session \"$id\", key \"$key\", kind \"$kind\": ${backendFailureMessage(e)}")
+                return
+            }
             resp.status = HttpServletResponse.SC_INTERNAL_SERVER_ERROR
             resp.contentType = "text/plain; charset=UTF-8"
             resp.writer.write("Failed to load image for session \"$id\", key \"$key\", kind \"$kind\": ${e.message ?: e.javaClass.name}")
