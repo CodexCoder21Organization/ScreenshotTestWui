@@ -55,10 +55,12 @@ listed. On failure, the originating page is rendered directly with an error bann
 service's full message:
 `400` for a missing or malformed field or a locally typed value rejection, `404` for a typed unknown
 session, `409` for a typed wrong-state response, and `502` for a connection or other backend failure.
-The currently pinned UrlResolver wraps exceptions raised inside the remote service as
-`SandboxException` without a structured remote exception type, so those remote validation and state
-errors currently use `502` while still showing the full service message. This transport limitation
-needs a typed exception field before the WUI can distinguish them reliably.
+Through the `url://` client a service failure arrives as a `SandboxException`; the WUI classifies it
+by the exception class the service itself reported (`remoteExceptionClassName`, available from
+[UrlResolver](https://github.com/CodexCoder21Organization/UrlResolver) 0.0.1261 and
+[UrlProtocol](https://github.com/CodexCoder21Organization/UrlProtocol) 0.0.532) and shows the
+service's own message. A failure the service did not report (a connection failure, a timeout, an
+older service build) has no reported class and uses `502`.
 If the WUI cannot establish its API connection while loading `/`, `/workers`, or `/session`, that page
 also returns `502` and shows the connection error.
 A POST that the browser labels as coming from another site (`Sec-Fetch-Site: cross-site` or
