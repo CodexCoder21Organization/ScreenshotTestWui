@@ -18,10 +18,10 @@ val dependencies = resolveDependencies2(
     // Jakarta Servlet API
     MavenPrebuilt2("jakarta.servlet:jakarta.servlet-api:5.0.0"),
     // UrlResolver and UrlProtocol — the WUI connects to url://screenshottest/ as a typed proxy.
-    // Resolver 0.0.1171 pairs protocol 0.0.503, libp2p snapshot-26 and SJVM 0.0.50; the four MUST
+    // Resolver 0.0.1260 pairs protocol 0.0.531, libp2p snapshot-27 and SJVM 0.0.50; the four MUST
     // move together. Kept in lockstep with BuildTestWui, which runs the same set in production.
-    MavenPrebuilt2("foundation.url:resolver:0.0.1171", resolveTransitiveDependencies = false),
-    MavenPrebuilt2("foundation.url:protocol:0.0.503", resolveTransitiveDependencies = false),
+    MavenPrebuilt2("foundation.url:resolver:0.0.1260", resolveTransitiveDependencies = false),
+    MavenPrebuilt2("foundation.url:protocol:0.0.531", resolveTransitiveDependencies = false),
     // SJVM for sandboxed execution (required by UrlResolver.openSandboxedConnection).
     // Must be >= 0.0.47: older releases take a suspending class-loader mutex on every class lookup
     // (https://github.com/CodexCoder21Organization/sandboxjvm/pull/93), so a session page's
@@ -60,7 +60,7 @@ val dependencies = resolveDependencies2(
     MavenPrebuilt2("org.slf4j:slf4j-api:1.7.36"),
     MavenPrebuilt2("org.slf4j:slf4j-simple:2.0.9"),
     // libp2p
-    MavenPrebuilt2("community.kotlin.libp2p:jvm-libp2p:1.3.0-codexcoder21-snapshot-26"),
+    MavenPrebuilt2("community.kotlin.libp2p:jvm-libp2p:1.3.0-codexcoder21-snapshot-27"),
     MavenPrebuilt2("com.google.protobuf:protobuf-java:3.25.1"),
     MavenPrebuilt2("tech.pegasys:noise-java:22.1.0"),
     // Netty (for libp2p)
@@ -138,7 +138,12 @@ fun buildMaven(): File {
         //          answered most of them with 503 "Read timed out".
         //        - Only DIFF keys get a diff thumbnail; the service writes no diff heatmap for
         //          MATCH keys, so that <img> always failed.
-        coordinates = "screenshottest.wui:screenshottest-wui:0.0.3",
+        // 0.0.4: Action errors get their documented statuses through the real url:// client.
+        //        - Classify a SandboxException by the service-reported remoteExceptionClassName
+        //          (IllegalArgumentException -> 400/404, IllegalStateException -> 409, else 502)
+        //          and show the service's own message instead of the sandbox wrapper text.
+        //        - Bump to resolver 0.0.1260 / protocol 0.0.531 / libp2p snapshot-27 / SJVM 0.0.50.
+        coordinates = "screenshottest.wui:screenshottest-wui:0.0.4",
         src = File("src"),
         compileDependencies = dependencies
     )
