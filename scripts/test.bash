@@ -9,12 +9,22 @@ if [ ! -f "$JAR_PATH" ]; then
   COURSIER_PATH="$SCRIPT_PATH/../jars/coursier"
   if [ ! -f "$COURSIER_PATH" ]; then
     echo "Downloading coursier..."
-    curl -fLo "$COURSIER_PATH" "https://github.com/coursier/launchers/raw/master/coursier"
+    # Pinned launcher: the unpinned raw/master launcher resolves a coursier whose cats classpath is
+    # incompatible (NoSuchMethodError cats.implicits$.catsStdInstancesForList), so every fetch fails.
+    if ! curl -fL -o "$COURSIER_PATH" "https://github.com/coursier/launchers/raw/15f36c167c30be237105f923151adaf177e7ee61/coursier"; then
+      rm -f "$COURSIER_PATH"
+      echo "Failed to download the pinned coursier launcher to $COURSIER_PATH" >&2
+      exit 1
+    fi
     chmod +x "$COURSIER_PATH"
   fi
 
   echo "Fetching kompile.cli:kompile-cli:0.0.65 from https://kotlin.directory/..."
   CLASSPATH=$("$COURSIER_PATH" fetch --repository https://kotlin.directory/ --repository central kompile.cli:kompile-cli:0.0.65 --classpath)
+  if [ -z "$CLASSPATH" ]; then
+    echo "coursier returned no classpath for kompile-cli; not writing a launcher to $JAR_PATH" >&2
+    exit 1
+  fi
 
   cat > "$JAR_PATH" <<'LAUNCHER_EOF'
 #!/bin/bash
