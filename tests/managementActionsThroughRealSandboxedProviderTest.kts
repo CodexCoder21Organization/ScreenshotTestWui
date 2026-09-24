@@ -83,6 +83,7 @@ import build.kotlin.withartifact.WithArtifact
 import foundation.url.protocol.BootstrapPeer
 import foundation.url.protocol.Libp2pPeer
 import foundation.url.protocol.ServiceHandler
+import foundation.url.protocol.ServiceInfrastructureException
 import foundation.url.resolver.UrlProtocol2
 import foundation.url.resolver.UrlResolver
 import screenshottest.api.ScreenshotTestApi
@@ -100,8 +101,9 @@ import kotlin.test.assertTrue
  * (`UrlResolver.openSandboxedConnection`): the provider's own IllegalStateException /
  * IllegalArgumentException must reach the WUI as the service-reported class on the resulting
  * SandboxException, so a wrong-state cancel is 409, an unknown session is 404, and a rejected
- * max-workers value is 400 -- each banner carrying the service's own message -- while a failure the
- * service did not report stays 502.
+ * max-workers value is 400 -- each banner carrying the service's own message -- while any other
+ * reported class stays 502 (500 for an image), and a hosting-layer ServiceInfrastructureException,
+ * which the service did not report, is 502 rather than a 409.
  */
 @build.kotlin.annotations.Timeout(120)
 fun managementActionsThroughRealSandboxedProviderTest() {
@@ -125,10 +127,15 @@ fun managementActionsThroughRealSandboxedProviderTest() {
                 "cancelSession" -> when (params["sessionId"]) {
                     "sess-c1" -> throw IllegalStateException("Session 'sess-c1' is COMPLETED; only RUNNING sessions can be cancelled.")
                     "sess-unknown" -> throw IllegalArgumentException("No screenshot session with id 'sess-unknown'.")
+                    "sess-infra" -> throw ServiceInfrastructureException("handler session expired")
                     else -> throw UnsupportedOperationException("backend exploded")
                 }
                 "deleteSession" -> throw IllegalStateException("Session '${params["sessionId"]}' is RUNNING; cancel it before deleting it.")
-                "setMaxWorkers" -> throw IllegalArgumentException("maxWorkers must be between 1 and 16, but was ${params["maxWorkers"]}.")
+                "setMaxWorkers" -> when ((params["maxWorkers"] as? Number)?.toInt()) {
+                    7 -> throw UnsupportedOperationException("the pool cannot be resized while draining")
+                    else -> throw IllegalArgumentException("maxWorkers must be between 1 and 16, but was ${params["maxWorkers"]}.")
+                }
+                "getImageChunk" -> throw UnsupportedOperationException("image store offline")
                 else -> throw IllegalArgumentException("Unexpected RPC '$path'.")
             }
         override fun onShutdown() = Unit
@@ -185,7 +192,7 @@ fun managementActionsThroughRealSandboxedProviderTest() {
         val delete = post(port, "/session/delete", "id=sess-r1&returnTo=list")
         val deleteHtml = bodyOf(delete)
         assertEquals(409, delete.responseCode, "A wrong-state delete through the real sandbox must be 409; page was:\n$deleteHtml")
-        assertTrue(deleteHtml.contains("Session &#39;sess-r1&#39; is RUNNING; cancel it before deleting it."),
+        assertTrue(deleteHtml.contains("""<span class="banner-text">Could not delete session &#39;sess-r1&#39;: Session &#39;sess-r1&#39; is RUNNING; cancel it before deleting it.</span>"""),
             "Expected the service's own message in the banner; page was:\n$deleteHtml")
 
         val maxWorkers = post(port, "/workers/max", "maxWorkers=99")
@@ -195,7 +202,31 @@ fun managementActionsThroughRealSandboxedProviderTest() {
             "Expected the service's own message in the banner; page was:\n$maxWorkersHtml")
 
         val other = post(port, "/session/cancel", "id=sess-other&returnTo=list")
-        assertEquals(502, other.responseCode, "A failure the service reports as any other class stays 502.")
+        val otherHtml = bodyOf(other)
+        assertEquals(502, other.responseCode, "A failure the service reports as any other class stays 502; page was:\n$otherHtml")
+        assertTrue(otherHtml.contains("""<span class="banner-text">The screenshot service failed to cancel session &#39;sess-other&#39;: backend exploded</span>"""),
+            "Expected the service's own message in the 502 banner; page was:\n$otherHtml")
+
+        // A hosting-layer failure is not the service's exception: 502, never 404/409, even though
+        // ServiceInfrastructureException is an IllegalStateException on the provider side.
+        val infra = post(port, "/session/cancel", "id=sess-infra&returnTo=list")
+        val infraHtml = bodyOf(infra)
+        assertEquals(502, infra.responseCode, "An infrastructure failure through the real sandbox must be 502; page was:\n$infraHtml")
+        assertTrue(infraHtml.contains("The screenshot service failed to cancel session &#39;sess-infra&#39;: "),
+            "Expected the 502 banner prefix; page was:\n$infraHtml")
+        assertTrue(infraHtml.contains("handler session expired"), "Expected the failure text in the banner; page was:\n$infraHtml")
+
+        val workersFailure = post(port, "/workers/max", "maxWorkers=7")
+        val workersFailureHtml = bodyOf(workersFailure)
+        assertEquals(502, workersFailure.responseCode, "A non-argument max-workers failure must be 502; page was:\n$workersFailureHtml")
+        assertTrue(workersFailureHtml.contains("The screenshot service failed to set max workers to 7: the pool cannot be resized while draining"),
+            "Expected the service's own message in the 502 banner; page was:\n$workersFailureHtml")
+
+        val image = URL("http://localhost:$port/image?id=sess-c1&key=home&kind=actual").openConnection() as HttpURLConnection
+        val imageBody = bodyOf(image)
+        assertEquals(500, image.responseCode, "A non-argument image failure must be 500; body was:\n$imageBody")
+        assertEquals("Failed to load image for session \"sess-c1\", key \"home\", kind \"actual\": image store offline", imageBody,
+            "Expected the service's own message in the image error")
     } finally {
         try { server?.stop() } finally {
             try { resolver?.close() } finally { provider.close() }
