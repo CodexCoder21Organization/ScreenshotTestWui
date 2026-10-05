@@ -25,3 +25,4 @@ Durable evidence: https://github.com/CodexCoder21Organization/ScreenshotTestWui/
 |---|---|---|---|
 | `deleteReportedArgumentThroughRealSandboxTest` | PASS 1/1 | 15.172s | /tmp/qf2-deleteReportedArgumentThroughRealSandboxTest.xml |
 | `deleteReportedOtherThroughRealSandboxTest` | PASS 1/1 | 18.572s | /tmp/qf2-deleteReportedOtherThroughRealSandboxTest.xml |
+| `imageFirstProbeReportedArgumentThroughRealSandboxTest` | PASS 1/1 | 14.298s | /tmp/qf2-imageFirstProbeReportedArgumentThroughRealSandboxTest.xml |
