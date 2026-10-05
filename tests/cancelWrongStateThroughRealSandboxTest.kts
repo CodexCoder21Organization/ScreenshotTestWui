@@ -118,6 +118,7 @@ fun cancelWrongStateThroughRealSandboxTest() {
         val providerNode = UrlProtocol2(emptyList<BootstrapPeer>(), eagerlyJoinNetwork = false, listenPort = 0)
         provider = providerNode
         val providerInfo = providerNode.joinNetwork(alias = "$serviceId-provider")
+        val providerActionCallCount = java.util.concurrent.atomic.AtomicInteger()
         val handler = object : ServiceHandler {
             override suspend fun handleRequest(path: String, params: Map<String, Any?>, metadata: Map<String, String>): Any? =
                 when (path) {
@@ -126,6 +127,7 @@ fun cancelWrongStateThroughRealSandboxTest() {
                         mapOf("sessionsJson" to "[]")
                     }
                     "cancelSession" -> {
+                        providerActionCallCount.incrementAndGet()
                         assertEquals(mapOf("sessionId" to "sess-c1", "reason" to "Cancelled from the management UI"), params, "cancelSession must use the production argument map.")
                         throw IllegalStateException("Session 'sess-c1' is COMPLETED; only RUNNING sessions can be cancelled.")
                     }
@@ -167,6 +169,7 @@ fun cancelWrongStateThroughRealSandboxTest() {
             val responseBody = (if (responseStatus < 400) conn.inputStream else conn.errorStream)
                 .bufferedReader().use { it.readText() }
             assertEquals(409, responseStatus, "Unexpected HTTP status; response body was:\n$responseBody")
+            assertEquals(1, providerActionCallCount.get())
             assertEquals(null, conn.getHeaderField("Location"), "An error response must not redirect.")
             assertTrue(
                 responseBody.contains("""<span class="banner-text">Could not cancel session &#39;sess-c1&#39;: Session &#39;sess-c1&#39; is COMPLETED; only RUNNING sessions can be cancelled.</span>"""),

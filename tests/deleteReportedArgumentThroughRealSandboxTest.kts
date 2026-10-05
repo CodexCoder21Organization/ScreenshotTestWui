@@ -118,6 +118,7 @@ fun deleteReportedArgumentThroughRealSandboxTest() {
         val providerNode = UrlProtocol2(emptyList<BootstrapPeer>(), eagerlyJoinNetwork = false, listenPort = 0)
         provider = providerNode
         val providerInfo = providerNode.joinNetwork(alias = "$serviceId-provider")
+        val providerActionCallCount = java.util.concurrent.atomic.AtomicInteger()
         val handler = object : ServiceHandler {
             override suspend fun handleRequest(path: String, params: Map<String, Any?>, metadata: Map<String, String>): Any? =
                 when (path) {
@@ -126,6 +127,7 @@ fun deleteReportedArgumentThroughRealSandboxTest() {
                         mapOf("sessionsJson" to "[]")
                     }
                     "deleteSession" -> {
+                        providerActionCallCount.incrementAndGet()
                         assertEquals(mapOf("sessionId" to "sess-r1"), params, "deleteSession must use the production argument map.")
                         throw IllegalArgumentException("No screenshot session with id 'sess-r1'.")
                     }
@@ -167,6 +169,7 @@ fun deleteReportedArgumentThroughRealSandboxTest() {
             val responseBody = (if (responseStatus < 400) conn.inputStream else conn.errorStream)
                 .bufferedReader().use { it.readText() }
             assertEquals(404, responseStatus, "Unexpected HTTP status; response body was:\n$responseBody")
+            assertEquals(1, providerActionCallCount.get())
             assertEquals(null, conn.getHeaderField("Location"), "An error response must not redirect.")
             assertTrue(
                 responseBody.contains("""<span class="banner-text">Could not delete session &#39;sess-r1&#39;: No screenshot session with id &#39;sess-r1&#39;.</span>"""),

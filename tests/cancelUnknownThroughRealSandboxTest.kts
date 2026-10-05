@@ -118,6 +118,7 @@ fun cancelUnknownThroughRealSandboxTest() {
         val providerNode = UrlProtocol2(emptyList<BootstrapPeer>(), eagerlyJoinNetwork = false, listenPort = 0)
         provider = providerNode
         val providerInfo = providerNode.joinNetwork(alias = "$serviceId-provider")
+        val providerActionCallCount = java.util.concurrent.atomic.AtomicInteger()
         val handler = object : ServiceHandler {
             override suspend fun handleRequest(path: String, params: Map<String, Any?>, metadata: Map<String, String>): Any? =
                 when (path) {
@@ -130,6 +131,7 @@ fun cancelUnknownThroughRealSandboxTest() {
                         mapOf("poolStatusJson" to """{"maxWorkers":3,"activeWorkers":0,"queuedSessions":0,"running":[],"queued":[]}""")
                     }
                     "cancelSession" -> {
+                        providerActionCallCount.incrementAndGet()
                         assertEquals(mapOf("sessionId" to "sess-unknown", "reason" to "Cancelled from the management UI"), params, "cancelSession must use the production argument map.")
                         throw IllegalArgumentException("No screenshot session with id 'sess-unknown'.")
                     }
@@ -171,6 +173,7 @@ fun cancelUnknownThroughRealSandboxTest() {
             val responseBody = (if (responseStatus < 400) conn.inputStream else conn.errorStream)
                 .bufferedReader().use { it.readText() }
             assertEquals(404, responseStatus, "Unexpected HTTP status; response body was:\n$responseBody")
+            assertEquals(1, providerActionCallCount.get())
             assertEquals(null, conn.getHeaderField("Location"), "An error response must not redirect.")
             assertTrue(
                 responseBody.contains("""<span class="banner-text">Could not cancel session &#39;sess-unknown&#39;: No screenshot session with id &#39;sess-unknown&#39;.</span>"""),

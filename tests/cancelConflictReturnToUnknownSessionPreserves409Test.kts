@@ -106,6 +106,7 @@ fun cancelConflictReturnToUnknownSessionPreserves409Test() {
     val statusFailure = java.util.concurrent.atomic.AtomicReference<Exception>()
     val entered = java.util.concurrent.CountDownLatch(1)
     val responseGate = kotlinx.coroutines.CompletableDeferred<Unit>()
+    val providerActionCallCount = java.util.concurrent.atomic.AtomicInteger()
     val handler = object : ServiceHandler {
         override suspend fun handleRequest(path: String, params: Map<String, Any?>, metadata: Map<String, String>): Any? {
             return when (path) {
@@ -126,6 +127,7 @@ fun cancelConflictReturnToUnknownSessionPreserves409Test() {
                     mapOf("resultsJson" to """{"mode":"compare","keys":[]}""")
                 }
                 "cancelSession" -> {
+                    providerActionCallCount.incrementAndGet()
                     assertEquals(mapOf("sessionId" to "sess-1", "reason" to "Cancelled from the management UI"), params)
                     throw IllegalStateException("wrong state")
                 }
@@ -182,6 +184,7 @@ fun cancelConflictReturnToUnknownSessionPreserves409Test() {
                 val code = conn.responseCode
                 val html = (if (code < 400) conn.inputStream else conn.errorStream).bufferedReader().use { it.readText() }
                 assertEquals(409, code, html)
+                assertEquals(1, providerActionCallCount.get())
                 assertNull(conn.getHeaderField("Location"))
                 val expectedText = "Could not cancel session 'sess-1': wrong state"
                 val escaped = expectedText.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;").replace("'", "&#39;")

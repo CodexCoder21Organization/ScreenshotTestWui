@@ -118,6 +118,7 @@ fun maxWorkersReportedStateThroughRealSandboxTest() {
         val providerNode = UrlProtocol2(emptyList<BootstrapPeer>(), eagerlyJoinNetwork = false, listenPort = 0)
         provider = providerNode
         val providerInfo = providerNode.joinNetwork(alias = "$serviceId-provider")
+        val providerActionCallCount = java.util.concurrent.atomic.AtomicInteger()
         val handler = object : ServiceHandler {
             override suspend fun handleRequest(path: String, params: Map<String, Any?>, metadata: Map<String, String>): Any? =
                 when (path) {
@@ -130,6 +131,7 @@ fun maxWorkersReportedStateThroughRealSandboxTest() {
                         mapOf("poolStatusJson" to """{"maxWorkers":3,"activeWorkers":0,"queuedSessions":0,"running":[],"queued":[]}""")
                     }
                     "setMaxWorkers" -> {
+                        providerActionCallCount.incrementAndGet()
                         assertEquals(mapOf("maxWorkers" to 99), params, "setMaxWorkers must use the production argument map.")
                         throw IllegalStateException("pool is not configurable right now")
                     }
@@ -171,6 +173,7 @@ fun maxWorkersReportedStateThroughRealSandboxTest() {
             val responseBody = (if (responseStatus < 400) conn.inputStream else conn.errorStream)
                 .bufferedReader().use { it.readText() }
             assertEquals(502, responseStatus, "Unexpected HTTP status; response body was:\n$responseBody")
+            assertEquals(1, providerActionCallCount.get())
             assertEquals(null, conn.getHeaderField("Location"), "An error response must not redirect.")
             assertTrue(
                 responseBody.contains("""<span class="banner-text">The screenshot service failed to set max workers to 99: pool is not configurable right now</span>"""),

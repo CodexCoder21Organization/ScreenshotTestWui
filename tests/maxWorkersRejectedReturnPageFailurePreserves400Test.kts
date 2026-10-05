@@ -107,6 +107,7 @@ fun maxWorkersRejectedReturnPageFailurePreserves400Test() {
     val statusFailure = java.util.concurrent.atomic.AtomicReference<Exception>()
     val entered = java.util.concurrent.CountDownLatch(1)
     val responseGate = kotlinx.coroutines.CompletableDeferred<Unit>()
+    val providerActionCallCount = java.util.concurrent.atomic.AtomicInteger()
     val handler = object : ServiceHandler {
         override suspend fun handleRequest(path: String, params: Map<String, Any?>, metadata: Map<String, String>): Any? {
             return when (path) {
@@ -132,6 +133,7 @@ fun maxWorkersRejectedReturnPageFailurePreserves400Test() {
                     throw IllegalStateException("wrong state")
                 }
                 "setMaxWorkers" -> {
+                    providerActionCallCount.incrementAndGet()
                     assertEquals(mapOf("maxWorkers" to 99), params)
                     throw IllegalArgumentException("maxWorkers must be between 1 and 16, but was 99.")
                 }
@@ -184,6 +186,7 @@ fun maxWorkersRejectedReturnPageFailurePreserves400Test() {
                 val code = conn.responseCode
                 val html = (if (code < 400) conn.inputStream else conn.errorStream).bufferedReader().use { it.readText() }
                 assertEquals(400, code, html)
+                assertEquals(1, providerActionCallCount.get())
                 assertNull(conn.getHeaderField("Location"))
                 val expectedText = "The screenshot service rejected max workers 99: maxWorkers must be between 1 and 16, but was 99."
                 val escaped = expectedText.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;").replace("'", "&#39;")

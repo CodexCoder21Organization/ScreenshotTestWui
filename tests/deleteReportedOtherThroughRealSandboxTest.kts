@@ -118,6 +118,7 @@ fun deleteReportedOtherThroughRealSandboxTest() {
         val providerNode = UrlProtocol2(emptyList<BootstrapPeer>(), eagerlyJoinNetwork = false, listenPort = 0)
         provider = providerNode
         val providerInfo = providerNode.joinNetwork(alias = "$serviceId-provider")
+        val providerActionCallCount = java.util.concurrent.atomic.AtomicInteger()
         val handler = object : ServiceHandler {
             override suspend fun handleRequest(path: String, params: Map<String, Any?>, metadata: Map<String, String>): Any? =
                 when (path) {
@@ -126,6 +127,7 @@ fun deleteReportedOtherThroughRealSandboxTest() {
                         mapOf("sessionsJson" to "[]")
                     }
                     "deleteSession" -> {
+                        providerActionCallCount.incrementAndGet()
                         assertEquals(mapOf("sessionId" to "sess-r1"), params, "deleteSession must use the production argument map.")
                         throw UnsupportedOperationException("backend exploded")
                     }
@@ -167,6 +169,7 @@ fun deleteReportedOtherThroughRealSandboxTest() {
             val responseBody = (if (responseStatus < 400) conn.inputStream else conn.errorStream)
                 .bufferedReader().use { it.readText() }
             assertEquals(502, responseStatus, "Unexpected HTTP status; response body was:\n$responseBody")
+            assertEquals(1, providerActionCallCount.get())
             assertEquals(null, conn.getHeaderField("Location"), "An error response must not redirect.")
             assertTrue(
                 responseBody.contains("""<span class="banner-text">The screenshot service failed to delete session &#39;sess-r1&#39;: backend exploded</span>"""),

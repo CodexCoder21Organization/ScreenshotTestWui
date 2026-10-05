@@ -165,6 +165,7 @@ fun imageFirstProbeReportedOtherThroughRealSandboxTest() {
             val responseBody = (if (responseStatus < 400) conn.inputStream else conn.errorStream)
                 .bufferedReader().use { it.readText() }
             assertEquals(500, responseStatus, "Unexpected HTTP status; response body was:\n$responseBody")
+            assertEquals("text/plain;charset=utf-8", conn.getHeaderField("Content-Type"))
             assertEquals(null, conn.getHeaderField("Location"), "An error response must not redirect.")
             assertEquals("""Failed to load image for session "sess-1", key "key-1", kind "actual": backend exploded""", responseBody, "The first-probe image error body must be exact.")
 
