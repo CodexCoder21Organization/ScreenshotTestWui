@@ -14,9 +14,10 @@ import screenshottest.api.ScreenshotTestApi
  * thumbnails, which is the load the WUI must sustain.
  *
  * The management actions ([cancelSession], [deleteSession], [setMaxWorkers]) and the pages they
- * re-render ([listSessions], [getWorkerPoolStatus]) are forwarded the same way, so a provider's own
- * exception reaches the WUI through the real sandbox exactly as in production. Page JSON comes back
- * in the result's `json` entry. The remaining calls throw.
+ * re-render ([listSessions], [getWorkerPoolStatus], [getSessionStatus], [getResultsJson]) are
+ * forwarded with the same argument maps and result keys as the production client, so provider
+ * responses and exceptions reach the WUI through the real sandbox exactly as in production. The
+ * remaining calls throw.
  */
 class SandboxedScreenshotTestClient : ScreenshotTestApi {
     override fun getImageChunk(sessionId: String, key: String, kind: String, offset: Long, length: Int): ByteArray? {
@@ -32,8 +33,11 @@ class SandboxedScreenshotTestClient : ScreenshotTestApi {
     }
 
     override fun getRendererVersion(): String = unsupported("getRendererVersion")
-    override fun getWorkerPoolStatus(): String =
-        ServiceBridge.rpc("getWorkerPoolStatus", mapOf())["json"] as String
+    override fun getWorkerPoolStatus(): String {
+        val result = ServiceBridge.rpc("getWorkerPoolStatus", emptyMap())
+        return result["poolStatusJson"]?.toString()
+            ?: throw IllegalStateException("Server did not return poolStatusJson")
+    }
     override fun setMaxWorkers(maxWorkers: Int) {
         ServiceBridge.rpc("setMaxWorkers", mapOf("maxWorkers" to maxWorkers))
     }
@@ -47,9 +51,21 @@ class SandboxedScreenshotTestClient : ScreenshotTestApi {
     override fun finalizeFile(sessionId: String, role: String, fileName: String, totalChunks: Int, sha256Hex: String): Unit =
         unsupported("finalizeFile")
     override fun startRender(sessionId: String): Unit = unsupported("startRender")
-    override fun getSessionStatus(sessionId: String): String = unsupported("getSessionStatus")
-    override fun getResultsJson(sessionId: String): String = unsupported("getResultsJson")
-    override fun listSessions(): String = ServiceBridge.rpc("listSessions", mapOf())["json"] as String
+    override fun getSessionStatus(sessionId: String): String {
+        val result = ServiceBridge.rpc("getSessionStatus", mapOf("sessionId" to sessionId))
+        return result["statusJson"]?.toString()
+            ?: throw IllegalStateException("Server did not return statusJson for session '$sessionId'")
+    }
+    override fun getResultsJson(sessionId: String): String {
+        val result = ServiceBridge.rpc("getResultsJson", mapOf("sessionId" to sessionId))
+        return result["resultsJson"]?.toString()
+            ?: throw IllegalStateException("Server did not return resultsJson for session '$sessionId'")
+    }
+    override fun listSessions(): String {
+        val result = ServiceBridge.rpc("listSessions", emptyMap())
+        return result["sessionsJson"]?.toString()
+            ?: throw IllegalStateException("Server did not return sessionsJson")
+    }
     override fun deleteSession(sessionId: String) {
         ServiceBridge.rpc("deleteSession", mapOf("sessionId" to sessionId))
     }
