@@ -26,3 +26,7 @@ Durable evidence: https://github.com/CodexCoder21Organization/ScreenshotTestWui/
 | `deleteReportedArgumentThroughRealSandboxTest` | PASS 1/1 | 15.172s | /tmp/qf2-deleteReportedArgumentThroughRealSandboxTest.xml |
 | `deleteReportedOtherThroughRealSandboxTest` | PASS 1/1 | 18.572s | /tmp/qf2-deleteReportedOtherThroughRealSandboxTest.xml |
 | `imageFirstProbeReportedArgumentThroughRealSandboxTest` | PASS 1/1 | 14.298s | /tmp/qf2-imageFirstProbeReportedArgumentThroughRealSandboxTest.xml |
+
+13:41 UTC — OBSERVED: three of nine selectors passed alone on unchanged head: both delete failures and corrected image rejected-argument404. XML names match requested selectors, test runtimes15.172/18.572/14.298s. Each pass checkpoint pushed and verified.
+INFER: normalized numeric map now reaches the intended provider exception; no assertion or source fix needed so far. Other image probe and remaining workers/synthetic scenarios underway.
+| `imageFirstProbeReportedOtherThroughRealSandboxTest` | PASS 1/1 | 8.128s | /tmp/qf2-imageFirstProbeReportedOtherThroughRealSandboxTest.xml |
