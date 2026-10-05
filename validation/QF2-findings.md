@@ -62,3 +62,6 @@ Exception in thread "main" foundation.url.resolver.UrlResolutionException: RPC r
 	at Qf2BuildRunRead.main(Qf2BuildRunRead.java:9)
 ```
 INFER: direct listing cannot currently recover the run ID. Neither this failure nor stale dashboard results establish that the submitted suite failed or passed. Full suite remains OPEN.
+
+13:56 UTC — OBSERVED: exact installed manager0.0.85 RemoteBuildWorkspace constructor bytecode has default poll interval10,000ms and polling limit1,800,000ms (30minutes), and its limit failure text includes runId and last status. No runner option changed.
+INFER: if service polling remains responsive but nonterminal, the original command should exit near14:15 and disclose run ID; this existing runner limit precedes the requested40-minute fallback. I will act on its tracked exit, not change the limit or resubmit. Prepared PR body has9/9 durations and preserves supplied WHY/review mapping/screenshots/footer.
