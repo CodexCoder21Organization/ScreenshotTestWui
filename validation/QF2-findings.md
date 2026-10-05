@@ -30,3 +30,4 @@ Durable evidence: https://github.com/CodexCoder21Organization/ScreenshotTestWui/
 13:41 UTC — OBSERVED: three of nine selectors passed alone on unchanged head: both delete failures and corrected image rejected-argument404. XML names match requested selectors, test runtimes15.172/18.572/14.298s. Each pass checkpoint pushed and verified.
 INFER: normalized numeric map now reaches the intended provider exception; no assertion or source fix needed so far. Other image probe and remaining workers/synthetic scenarios underway.
 | `imageFirstProbeReportedOtherThroughRealSandboxTest` | PASS 1/1 | 8.128s | /tmp/qf2-imageFirstProbeReportedOtherThroughRealSandboxTest.xml |
+| `maxWorkersReportedOtherThroughRealSandboxTest` | PASS 1/1 | 8.934s | /tmp/qf2-maxWorkersReportedOtherThroughRealSandboxTest.xml |
