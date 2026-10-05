@@ -34,3 +34,4 @@ INFER: normalized numeric map now reaches the intended provider exception; no as
 | `maxWorkersReportedStateThroughRealSandboxTest` | PASS 1/1 | 15.185s | /tmp/qf2-maxWorkersReportedStateThroughRealSandboxTest.xml |
 | `sandboxedBackendFailuresMapToStatusesTest` | PASS 1/1 | 3.583s | /tmp/qf2-sandboxedBackendFailuresMapToStatusesTest.xml |
 | `sandboxedReportedArgumentMapsTo404Test` | PASS 1/1 | 2.985s | /tmp/qf2-sandboxedReportedArgumentMapsTo404Test.xml |
+| `sandboxedReportedStateMapsTo409Test` | PASS 1/1 | 1.685s | /tmp/qf2-sandboxedReportedStateMapsTo409Test.xml |
