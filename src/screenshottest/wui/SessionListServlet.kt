@@ -24,7 +24,7 @@ class SessionListServlet : HttpServlet() {
         } catch (e: Exception) {
             resp.status = HttpServletResponse.SC_BAD_GATEWAY
             resp.contentType = "text/html; charset=UTF-8"
-            resp.writer.write(errorPage("Failed to load sessions: ${escapeHtml(e.message ?: e.javaClass.name)}"))
+            resp.writer.write(errorPage("Failed to load sessions: ${escapeHtml(backendFailureMessage(e))}"))
             return
         }
         val clock = servletContext.getScreenshotTestClock()
@@ -50,7 +50,7 @@ fun renderSessionListPage(
         // health checks and monitors see a non-200, rather than a misleading 200 with an error body.
         return PageResult(
             HttpServletResponse.SC_BAD_GATEWAY,
-            errorPage("Failed to load sessions: ${escapeHtml(e.message ?: e.javaClass.name)}", banner),
+            errorPage("Failed to load sessions: ${escapeHtml(backendFailureMessage(e))}", banner),
         )
     }
 
@@ -58,7 +58,7 @@ fun renderSessionListPage(
         sessionNoticeBanner(api, sessions, noticeCode, noticeId)
     } catch (e: Exception) {
         return PageResult(HttpServletResponse.SC_BAD_GATEWAY,
-            errorPage("Failed to verify the session notice: ${escapeHtml(e.message ?: e.javaClass.name)}"))
+            errorPage("Failed to verify the session notice: ${escapeHtml(backendFailureMessage(e))}"))
     }
     val html = buildString {
         append(pageHeader("ScreenshotTest - Sessions"))

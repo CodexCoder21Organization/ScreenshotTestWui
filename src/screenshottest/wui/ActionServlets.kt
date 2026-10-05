@@ -42,7 +42,7 @@ class CancelSessionServlet : HttpServlet() {
             servletContext.getScreenshotTestApi()
         } catch (e: Exception) {
             renderActionError(resp, target, id, HttpServletResponse.SC_BAD_GATEWAY,
-                "The screenshot service failed to cancel session '$id': ${e.message ?: e.javaClass.name}")
+                "The screenshot service failed to cancel session '$id': ${backendFailureMessage(e)}")
             return
         }
         try {
@@ -72,7 +72,7 @@ class DeleteSessionServlet : HttpServlet() {
             servletContext.getScreenshotTestApi()
         } catch (e: Exception) {
             renderActionError(resp, target, id, HttpServletResponse.SC_BAD_GATEWAY,
-                "The screenshot service failed to delete session '$id': ${e.message ?: e.javaClass.name}")
+                "The screenshot service failed to delete session '$id': ${backendFailureMessage(e)}")
             return
         }
         try {
@@ -106,7 +106,7 @@ class SetMaxWorkersServlet : HttpServlet() {
             servletContext.getScreenshotTestApi()
         } catch (e: Exception) {
             renderWorkersError(resp, HttpServletResponse.SC_BAD_GATEWAY, raw,
-                "The screenshot service failed to set max workers to $value: ${e.message ?: e.javaClass.name}")
+                "The screenshot service failed to set max workers to $value: ${backendFailureMessage(e)}")
             return
         }
         try {
@@ -133,7 +133,7 @@ class SetMaxWorkersServlet : HttpServlet() {
             renderWorkersPage(api, clock.currentTimeMillis(), banner, autoRefresh = false, maxWorkersInput = rawInput)
         } catch (e: Exception) {
             PageResult(HttpServletResponse.SC_BAD_GATEWAY,
-                errorPage("Failed to load the render worker pool: ${escapeHtml(e.message ?: e.javaClass.name)}", banner))
+                errorPage("Failed to load the render worker pool: ${escapeHtml(backendFailureMessage(e))}", banner))
         }
         writePage(resp, page, status)
     }
@@ -168,7 +168,7 @@ private fun HttpServlet.renderActionError(
         }
     } catch (e: Exception) {
         PageResult(HttpServletResponse.SC_BAD_GATEWAY,
-            errorPage("Failed to load the action's return page: ${escapeHtml(e.message ?: e.javaClass.name)}", banner))
+            errorPage("Failed to load the action's return page: ${escapeHtml(backendFailureMessage(e))}", banner))
     }
     writePage(resp, page, status)
 }

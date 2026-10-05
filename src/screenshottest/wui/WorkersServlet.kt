@@ -26,7 +26,7 @@ class WorkersServlet : HttpServlet() {
         } catch (e: Exception) {
             resp.status = HttpServletResponse.SC_BAD_GATEWAY
             resp.contentType = "text/html; charset=UTF-8"
-            resp.writer.write(errorPage("Failed to load the render worker pool: ${escapeHtml(e.message ?: e.javaClass.name)}"))
+            resp.writer.write(errorPage("Failed to load the render worker pool: ${escapeHtml(backendFailureMessage(e))}"))
             return
         }
         val clock = servletContext.getScreenshotTestClock()
@@ -76,7 +76,7 @@ fun renderWorkersPage(
     } catch (e: Exception) {
         return PageResult(
             HttpServletResponse.SC_BAD_GATEWAY,
-            errorPage("Failed to load the render worker pool: ${escapeHtml(e.message ?: e.javaClass.name)}", banner),
+            errorPage("Failed to load the render worker pool: ${escapeHtml(backendFailureMessage(e))}", banner),
         )
     }
 
@@ -92,7 +92,7 @@ fun renderWorkersPage(
         }
     } catch (e: Exception) {
         return PageResult(HttpServletResponse.SC_BAD_GATEWAY,
-            errorPage("Failed to verify the worker pool notice: ${escapeHtml(e.message ?: e.javaClass.name)}"))
+            errorPage("Failed to verify the worker pool notice: ${escapeHtml(backendFailureMessage(e))}"))
     }
 
     // Meta refresh targets the clean URL, so a post-action notice is shown once, not on every reload.

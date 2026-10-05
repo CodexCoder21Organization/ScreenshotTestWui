@@ -64,6 +64,8 @@ path matches only the exact names `java.lang.IllegalArgumentException` and
 `java.lang.IllegalStateException`; subclass names such as `java.lang.NumberFormatException`, names
 that merely contain those names, other classes, and missing reported classes use `502`. If the
 service reported a class but no message, the class name is shown. The message is HTML-escaped once.
+The same message selection and escaping apply to page loads, queued-session creation-time and
+results lookups, and notice verification.
 An action error keeps its classified HTTP status even when re-rendering its return page fails.
 For `GET /session?id=…`, a rejected-argument status call returns `404`; any other status-call
 failure returns `502`, with the same service-reported message.

@@ -29,7 +29,7 @@ class SessionDetailServlet : HttpServlet() {
             servletContext.getScreenshotTestApi()
         } catch (e: Exception) {
             resp.status = HttpServletResponse.SC_BAD_GATEWAY
-            resp.writer.write(errorPage("Failed to load session \"${escapeHtml(id)}\": ${escapeHtml(e.message ?: e.javaClass.name)}"))
+            resp.writer.write(errorPage("Failed to load session \"${escapeHtml(id)}\": ${escapeHtml(backendFailureMessage(e))}"))
             return
         }
         val clock = servletContext.getScreenshotTestClock()
@@ -80,7 +80,7 @@ fun renderSessionDetailPage(
         found
     } catch (e: Exception) {
         return PageResult(HttpServletResponse.SC_BAD_GATEWAY,
-            errorPage("Failed to load the creation time for queued session \"${escapeHtml(id)}\": ${escapeHtml(e.message ?: e.javaClass.name)}", banner))
+            errorPage("Failed to load the creation time for queued session \"${escapeHtml(id)}\": ${escapeHtml(backendFailureMessage(e))}", banner))
     } else 0L
     val liveBanner = banner ?: noticeBanner(noticeCode, noticeId, sessionStatus = status, isListed = noticeId == id)
     val durationHtml = if (queuePosition != null && createdAt <= 0L) {
@@ -94,7 +94,7 @@ fun renderSessionDetailPage(
         try {
             results = JSONObject(api.getResultsJson(id))
         } catch (e: Exception) {
-            resultsError = e.message ?: e.javaClass.name
+            resultsError = backendFailureMessage(e)
         }
     }
     val mode = results?.optString("mode", "") ?: ""
