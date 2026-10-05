@@ -29,7 +29,7 @@ class SessionDetailServlet : HttpServlet() {
             servletContext.getScreenshotTestApi()
         } catch (e: Exception) {
             resp.status = HttpServletResponse.SC_BAD_GATEWAY
-            resp.writer.write(errorPage("Failed to load session \"${escapeHtml(id)}\": ${escapeHtml(e.message ?: e.javaClass.name)}"))
+            resp.writer.write(errorPage("Failed to load session \"${escapeHtml(id)}\": ${escapeHtml(backendFailureMessage(e))}"))
             return
         }
         val clock = servletContext.getScreenshotTestClock()
@@ -43,8 +43,8 @@ class SessionDetailServlet : HttpServlet() {
 }
 
 /**
- * Renders session [id]'s detail page with an optional [banner]. A session the service cannot load
- * yields a `404` error page that still carries [banner].
+ * Renders session [id]'s detail page with an optional [banner]. A rejected session id yields
+ * `404`; other status-call failures yield `502`. Both error pages still carry [banner].
  */
 fun renderSessionDetailPage(
     api: ScreenshotTestApi, nowMs: Long, id: String, banner: Banner?,
@@ -54,8 +54,9 @@ fun renderSessionDetailPage(
         JSONObject(api.getSessionStatus(id))
     } catch (e: Exception) {
         return PageResult(
-            HttpServletResponse.SC_NOT_FOUND,
-            errorPage("Failed to load session \"${escapeHtml(id)}\": ${escapeHtml(e.message ?: e.javaClass.name)}", banner),
+            if (classifyBackendFailureKind(e) == BackendFailureKind.REJECTED_ARGUMENT)
+                HttpServletResponse.SC_NOT_FOUND else HttpServletResponse.SC_BAD_GATEWAY,
+            errorPage("Failed to load session \"${escapeHtml(id)}\": ${escapeHtml(backendFailureMessage(e))}", banner),
         )
     }
 
@@ -79,7 +80,7 @@ fun renderSessionDetailPage(
         found
     } catch (e: Exception) {
         return PageResult(HttpServletResponse.SC_BAD_GATEWAY,
-            errorPage("Failed to load the creation time for queued session \"${escapeHtml(id)}\": ${escapeHtml(e.message ?: e.javaClass.name)}", banner))
+            errorPage("Failed to load the creation time for queued session \"${escapeHtml(id)}\": ${escapeHtml(backendFailureMessage(e))}", banner))
     } else 0L
     val liveBanner = banner ?: noticeBanner(noticeCode, noticeId, sessionStatus = status, isListed = noticeId == id)
     val durationHtml = if (queuePosition != null && createdAt <= 0L) {
@@ -93,7 +94,7 @@ fun renderSessionDetailPage(
         try {
             results = JSONObject(api.getResultsJson(id))
         } catch (e: Exception) {
-            resultsError = e.message ?: e.javaClass.name
+            resultsError = backendFailureMessage(e)
         }
     }
     val mode = results?.optString("mode", "") ?: ""

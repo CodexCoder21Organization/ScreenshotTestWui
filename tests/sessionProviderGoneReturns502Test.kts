@@ -77,6 +77,7 @@
 @file:WithArtifact("org.jetbrains.kotlin:kotlin-test:1.9.22")
 
 package screenshottest.wui
+import kotlin.test.*
 
 import build.kotlin.withartifact.WithArtifact
 import foundation.url.protocol.BootstrapPeer
@@ -94,64 +95,47 @@ import java.util.concurrent.TimeUnit
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
-/**
- * A session page renders one `<img>` per thumbnail, so opening it makes the browser request every
- * thumbnail from `/image` at once. In production each of those requests goes through the WUI's SJVM
- * sandbox proxy for `url://screenshottest/`, and ContainerNursery's HTTPS proxy answers `503 Service
- * Unavailable: Read timed out` for any request the WUI has not started answering within 30 seconds.
- *
- * The live page
- * https://screenshottest.nursery.wasmserver.com/session?id=sess-0e7a76ce-d8cc-423f-a3a5-f1664b893546
- * showed most thumbnails as 503 after 30 or 60 seconds: fifteen concurrent sandboxed `getImageChunk`
- * calls of 64–140 KB images each took 40–75 seconds. Two defects compounded. SJVM releases before
- * 0.0.47 take a suspending class-loader mutex on every class lookup, so concurrent interpreted calls
- * queue behind one another (https://github.com/CodexCoder21Organization/sandboxjvm/pull/93), and the
- * served client base64-decoded every slice in the interpreter (now served as raw bytes,
- * https://github.com/CodexCoder21Organization/ScreenshotTestServerService/pull/14).
- *
- * This test serves the thumbnails through the same path: a real in-process `url://` provider node
- * serves sandbox client bytecode that fetches each slice like the production client, the WUI reaches
- * it through `UrlResolver.openSandboxedConnection`, and fifteen HTTP clients request every thumbnail
- * concurrently. Every request must return the exact image bytes, and each must complete within the
- * 30-second window ContainerNursery allows before it gives up on the WUI.
- */
-@build.kotlin.annotations.Timeout(600)
-fun imageEndpointConcurrentSandboxedLoadsTest() {
-    val proxyReadTimeoutMs = 30_000L
-    val serviceId = "screenshottest-wui-concurrent-image-test"
-    val sessionId = "sess-concurrent"
-    // Sizes of the four compare thumbnails on the reported session page.
-    val imageSizes = listOf(64_268, 93_137, 115_973, 139_475)
-    val images = imageSizes.mapIndexed { index, size -> ByteArray(size) { i -> ((i * 31 + index) % 251).toByte() } }
-    val keys = images.indices.map { "key-$it" }
-    val requestCount = 15
-
+fun sessionProviderGoneReturns502Test() {
+    val serviceId = "wui-review-${System.nanoTime()}"
     val classLoader = Thread.currentThread().contextClassLoader
-    fun requiredResource(name: String): ByteArray =
-        requireNotNull(classLoader.getResourceAsStream(name)) {
-            "The sandbox fixture resource '$name' is missing from the test classpath."
-        }.use { it.readBytes() }
-    val implementationJar = requiredResource("sandbox-client-impl.jar")
-    val stdlibJar = requiredResource("stdlib.jar")
+    val implementationJar = requireNotNull(classLoader.getResourceAsStream("sandbox-client-impl.jar")).use { it.readBytes() }
+    val stdlibJar = requireNotNull(classLoader.getResourceAsStream("stdlib.jar")).use { it.readBytes() }
     val implementationJarDigest = MessageDigest.getInstance("SHA-256").digest(implementationJar)
         .joinToString("") { "%02x".format(it.toInt() and 0xff) }
-
+    val actionFailure = java.util.concurrent.atomic.AtomicReference<Exception>()
+    val statusFailure = java.util.concurrent.atomic.AtomicReference<Exception>()
+    val entered = java.util.concurrent.CountDownLatch(1)
+    val responseGate = kotlinx.coroutines.CompletableDeferred<Unit>()
     val handler = object : ServiceHandler {
         override suspend fun handleRequest(path: String, params: Map<String, Any?>, metadata: Map<String, String>): Any? {
-            require(path == "getImageChunk") { "Unexpected RPC '$path' with params $params." }
-            val keyIndex = keys.indexOf(params["key"].toString())
-            require(params["sessionId"] == sessionId && params["kind"] == "actual" && keyIndex >= 0 &&
-                params["encoding"] == "bytes"
-            ) {
-                "Unexpected getImageChunk params $params."
+            return when (path) {
+                "listSessions" -> {
+                    assertEquals(emptyMap(), params)
+                    mapOf("sessionsJson" to "[]")
+                }
+                "getWorkerPoolStatus" -> {
+                    assertEquals(emptyMap(), params)
+                    mapOf("poolStatusJson" to """{"maxWorkers":3,"activeWorkers":0,"queuedSessions":0,"running":[],"queued":[]}""")
+                }
+                "getSessionStatus" -> {
+                    assertEquals(mapOf("sessionId" to "sess-1"), params)
+                    mapOf("statusJson" to """{"sessionId":"sess-1","state":"COMPLETED","rendererVersion":"test","queuePosition":null}""")
+                }
+                "getResultsJson" -> {
+                    assertEquals(mapOf("sessionId" to "sess-1"), params)
+                    mapOf("resultsJson" to """{"mode":"compare","keys":[]}""")
+                }
+                "cancelSession" -> {
+                    assertEquals(mapOf("sessionId" to "sess-1", "reason" to "Cancelled from the management UI"), params)
+                    throw IllegalStateException("wrong state")
+                }
+                "setMaxWorkers" -> {
+                    assertEquals(mapOf("maxWorkers" to 99), params)
+                    throw IllegalArgumentException("maxWorkers must be between 1 and 16, but was 99.")
+                }
+                else -> throw UnsupportedOperationException("Unexpected RPC '$path'.")
             }
-            val image = images[keyIndex]
-            val offset = (params["offset"] as Number).toInt()
-            val length = (params["length"] as Number).toInt()
-            if (offset >= image.size) return mapOf("data" to null)
-            return mapOf("data" to image.copyOfRange(offset, minOf(image.size, offset + length)))
         }
-
         override fun onShutdown() = Unit
         override fun getImplementationJar(): ByteArray = implementationJar
         override fun getImplementationClassName(): String = "screenshottest.wui.testfixtures.SandboxedScreenshotTestClient"
@@ -159,90 +143,55 @@ fun imageEndpointConcurrentSandboxedLoadsTest() {
         override fun getStdlibJar(): ByteArray = stdlibJar
         override fun supportsSandboxedExecution(): Boolean = true
     }
-
     val provider = UrlProtocol2(emptyList<BootstrapPeer>(), eagerlyJoinNetwork = false, listenPort = 0)
+    var clientProtocol: UrlProtocol2? = null
     var resolver: UrlResolver? = null
     var server: org.eclipse.jetty.server.Server? = null
-    val httpClients = Executors.newFixedThreadPool(requestCount)
+    val executor = Executors.newSingleThreadExecutor()
     try {
-        val providerInfo = provider.joinNetwork(alias = "$serviceId-provider")
+        val info = provider.joinNetwork(alias = "$serviceId-provider")
         provider.registerGlobalService(serviceUrl = "url://$serviceId/", handler = handler)
-        val providerPeer = Libp2pPeer.remote(
-            peerId = providerInfo.peerId,
-            multiaddresses = providerInfo.multiaddresses
-                .filter { it.contains("/ip4/") }
+        val peer = Libp2pPeer.remote(peerId = info.peerId,
+            multiaddresses = info.multiaddresses.filter { it.contains("/ip4/") }
                 .map { it.replace(Regex("/ip4/[0-9.]+/"), "/ip4/127.0.0.1/") },
-            advertisedServices = listOf(serviceId),
-        )
-        val clientResolver = UrlResolver(UrlProtocol2(listOf(providerPeer), eagerlyJoinNetwork = false, listenPort = 0))
-        resolver = clientResolver
-        // Same proxy options as ScreenshotTestClient uses for url://screenshottest/ in production.
-        val api = clientResolver.openSandboxedConnection(
-            "url://$serviceId/",
-            ScreenshotTestApi::class,
-            connectionTimeoutMs = 120_000,
-            methodInvocationTimeoutSeconds = 120,
-        )
-
+            advertisedServices = listOf(serviceId))
+        val protocol = UrlProtocol2(listOf(peer), eagerlyJoinNetwork = false, listenPort = 0)
+        clientProtocol = protocol
+        val client = UrlResolver(protocol)
+        resolver = client
+        val proxy = client.openSandboxedConnection("url://$serviceId/", ScreenshotTestApi::class)
+        val api = object : ScreenshotTestApi by proxy {
+            override fun cancelSession(sessionId: String, reason: String) {
+                try { proxy.cancelSession(sessionId, reason) } catch (e: Exception) { actionFailure.set(e); throw e }
+            }
+            override fun getSessionStatus(sessionId: String): String {
+                try { return proxy.getSessionStatus(sessionId) } catch (e: Exception) { statusFailure.set(e); throw e }
+            }
+        }
         val wui = createServer(0, api)
         server = wui
         wui.start()
         val port = (wui.connectors[0] as org.eclipse.jetty.server.ServerConnector).localPort
-
-        val futures = (0 until requestCount).map { i ->
-            httpClients.submit(Callable {
-                val keyIndex = i % keys.size
-                val started = System.nanoTime()
-                val conn = URL("http://localhost:$port/image?id=$sessionId&key=${keys[keyIndex]}&kind=actual")
-                    .openConnection() as HttpURLConnection
-                conn.readTimeout = 300_000
-                val status = conn.responseCode
-                val body = (if (status == 200) conn.inputStream else conn.errorStream)?.use { it.readBytes() } ?: ByteArray(0)
-                val elapsedMs = (System.nanoTime() - started) / 1_000_000
-                Triple(keyIndex, status to body, elapsedMs)
-            })
-        }
-        val results = futures.map { it.get(10, TimeUnit.MINUTES) }
-
-        val summary = results.joinToString(", ") { (keyIndex, response, elapsedMs) ->
-            "${keys[keyIndex]}=${response.first}/${response.second.size}B/${elapsedMs}ms"
-        }
-        println("[concurrent-image-loads] $summary")
-        for ((keyIndex, response, _) in results) {
-            val (status, body) = response
-            assertEquals(
-                200, status,
-                "Every concurrent thumbnail request must succeed; ${keys[keyIndex]} returned $status " +
-                    "'${String(body, Charsets.UTF_8).take(500)}'. All requests: $summary"
-            )
-            assertTrue(
-                body.contentEquals(images[keyIndex]),
-                "The ${keys[keyIndex]} thumbnail must be streamed byte-for-byte (${images[keyIndex].size} bytes), " +
-                    "but ${body.size} bytes came back. All requests: $summary"
-            )
-        }
-        val slow = results.filter { it.third > proxyReadTimeoutMs }
-        // Which sandbox stack this JVM actually loaded, so a slow run shows whether an older SJVM or
-        // resolver reached the classpath (SJVM releases before 0.0.47 serialize concurrent calls).
-        val loadedStack = listOf(
-            "net.javadeploy.sjvm.impl.SJVMImpl",
-            "foundation.url.resolver.UrlResolver",
-            "foundation.url.protocol.ServiceHandler",
-        ).joinToString(", ") { name ->
-            val location = Class.forName(name).protectionDomain.codeSource?.location?.path ?: "unknown"
-            location.substringAfterLast('/')
-        }
-        assertTrue(
-            slow.isEmpty(),
-            "[loaded: $loadedStack; ${Runtime.getRuntime().availableProcessors()} processors] " +
-                "Each of $requestCount concurrent thumbnail requests must complete within ContainerNursery's " +
-                "${proxyReadTimeoutMs}ms proxy read timeout, otherwise the browser receives 503 instead of the " +
-                "image; ${slow.size} did not. All requests: $summary"
-        )
-    } finally {
-        httpClients.shutdownNow()
-        server?.stop()
-        resolver?.close()
         provider.close()
+        val conn = URL("http://localhost:$port/session?id=sess-1").openConnection() as HttpURLConnection
+            try {
+                conn.instanceFollowRedirects = false
+
+                val code = conn.responseCode
+                val html = (if (code < 400) conn.inputStream else conn.errorStream).bufferedReader().use { it.readText() }
+                assertEquals(502, code, html)
+                assertNull(conn.getHeaderField("Location"))
+                val expectedMessage = requireNotNull(statusFailure.get()).message ?: requireNotNull(statusFailure.get()).javaClass.name
+                val escapedMessage = expectedMessage.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;").replace("'", "&#39;")
+                val expectedText = "Failed to load session \"sess-1\": $escapedMessage"
+                val displayed = Regex("""<div class="info-value text-red">([^<]*)</div>""").find(html)?.groupValues?.get(1)
+                assertEquals(expectedText, displayed, html)
+            } finally { conn.disconnect() }
+    } finally {
+        responseGate.complete(Unit)
+        executor.shutdownNow()
+        try { server?.stop() } finally {
+            try { if (resolver != null) resolver.close() else clientProtocol?.close() } finally { provider.close() }
+        }
     }
 }

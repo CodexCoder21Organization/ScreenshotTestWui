@@ -42,14 +42,14 @@ class CancelSessionServlet : HttpServlet() {
             servletContext.getScreenshotTestApi()
         } catch (e: Exception) {
             renderActionError(resp, target, id, HttpServletResponse.SC_BAD_GATEWAY,
-                "The screenshot service failed to cancel session '$id': ${e.message ?: e.javaClass.name}")
+                "The screenshot service failed to cancel session '$id': ${backendFailureMessage(e)}")
             return
         }
         try {
             api.cancelSession(id, reason)
         } catch (e: Exception) {
             val (status, prefix) = classifyBackendFailure(e, "cancel session '$id'")
-            renderActionError(resp, target, id, status, "$prefix: ${e.message ?: e.javaClass.name}")
+            renderActionError(resp, target, id, status, "$prefix: ${backendFailureMessage(e)}")
             return
         }
         redirectWithNotice(resp, target, id, NOTICE_CANCELLED, id)
@@ -72,14 +72,14 @@ class DeleteSessionServlet : HttpServlet() {
             servletContext.getScreenshotTestApi()
         } catch (e: Exception) {
             renderActionError(resp, target, id, HttpServletResponse.SC_BAD_GATEWAY,
-                "The screenshot service failed to delete session '$id': ${e.message ?: e.javaClass.name}")
+                "The screenshot service failed to delete session '$id': ${backendFailureMessage(e)}")
             return
         }
         try {
             api.deleteSession(id)
         } catch (e: Exception) {
             val (status, prefix) = classifyBackendFailure(e, "delete session '$id'")
-            renderActionError(resp, target, id, status, "$prefix: ${e.message ?: e.javaClass.name}")
+            renderActionError(resp, target, id, status, "$prefix: ${backendFailureMessage(e)}")
             return
         }
         redirectWithNotice(resp, target, id, NOTICE_DELETED, id)
@@ -106,18 +106,19 @@ class SetMaxWorkersServlet : HttpServlet() {
             servletContext.getScreenshotTestApi()
         } catch (e: Exception) {
             renderWorkersError(resp, HttpServletResponse.SC_BAD_GATEWAY, raw,
-                "The screenshot service failed to set max workers to $value: ${e.message ?: e.javaClass.name}")
+                "The screenshot service failed to set max workers to $value: ${backendFailureMessage(e)}")
             return
         }
         try {
             api.setMaxWorkers(value)
-        } catch (e: IllegalArgumentException) {
-            renderWorkersError(resp, HttpServletResponse.SC_BAD_REQUEST, raw,
-                "The screenshot service rejected max workers $value: ${e.message ?: e.javaClass.name}")
-            return
         } catch (e: Exception) {
-            renderWorkersError(resp, HttpServletResponse.SC_BAD_GATEWAY, raw,
-                "The screenshot service failed to set max workers to $value: ${e.message ?: e.javaClass.name}")
+            if (classifyBackendFailureKind(e) == BackendFailureKind.REJECTED_ARGUMENT) {
+                renderWorkersError(resp, HttpServletResponse.SC_BAD_REQUEST, raw,
+                    "The screenshot service rejected max workers $value: ${backendFailureMessage(e)}")
+            } else {
+                renderWorkersError(resp, HttpServletResponse.SC_BAD_GATEWAY, raw,
+                    "The screenshot service failed to set max workers to $value: ${backendFailureMessage(e)}")
+            }
             return
         }
         resp.status = HttpServletResponse.SC_SEE_OTHER
@@ -132,7 +133,7 @@ class SetMaxWorkersServlet : HttpServlet() {
             renderWorkersPage(api, clock.currentTimeMillis(), banner, autoRefresh = false, maxWorkersInput = rawInput)
         } catch (e: Exception) {
             PageResult(HttpServletResponse.SC_BAD_GATEWAY,
-                errorPage("Failed to load the render worker pool: ${escapeHtml(e.message ?: e.javaClass.name)}", banner))
+                errorPage("Failed to load the render worker pool: ${escapeHtml(backendFailureMessage(e))}", banner))
         }
         writePage(resp, page, status)
     }
@@ -143,10 +144,10 @@ class SetMaxWorkersServlet : HttpServlet() {
  * service's documented [IllegalArgumentException] (unknown session) and [IllegalStateException]
  * (wrong state) are the operator's to act on; anything else is an upstream failure.
  */
-private fun classifyBackendFailure(e: Exception, action: String): Pair<Int, String> = when (e) {
-    is IllegalArgumentException -> HttpServletResponse.SC_NOT_FOUND to "Could not $action"
-    is IllegalStateException -> HttpServletResponse.SC_CONFLICT to "Could not $action"
-    else -> HttpServletResponse.SC_BAD_GATEWAY to "The screenshot service failed to $action"
+private fun classifyBackendFailure(e: Exception, action: String): Pair<Int, String> = when (classifyBackendFailureKind(e)) {
+    BackendFailureKind.REJECTED_ARGUMENT -> HttpServletResponse.SC_NOT_FOUND to "Could not $action"
+    BackendFailureKind.CONFLICTING_STATE -> HttpServletResponse.SC_CONFLICT to "Could not $action"
+    BackendFailureKind.UPSTREAM -> HttpServletResponse.SC_BAD_GATEWAY to "The screenshot service failed to $action"
 }
 
 private fun HttpServlet.renderActionError(
@@ -167,18 +168,17 @@ private fun HttpServlet.renderActionError(
         }
     } catch (e: Exception) {
         PageResult(HttpServletResponse.SC_BAD_GATEWAY,
-            errorPage("Failed to load the action's return page: ${escapeHtml(e.message ?: e.javaClass.name)}", banner))
+            errorPage("Failed to load the action's return page: ${escapeHtml(backendFailureMessage(e))}", banner))
     }
     writePage(resp, page, status)
 }
 
 /**
- * Writes [page] with the action's [actionStatus] — unless re-rendering the page itself failed (e.g.
- * the backend is down, `502`), in which case that failure's status wins; the page carries the
- * action's banner either way.
+ * Writes [page] with the action's [actionStatus]. A return-page failure adds error content but
+ * does not change the status of the action that the caller submitted.
  */
 private fun writePage(resp: HttpServletResponse, page: PageResult, actionStatus: Int) {
-    resp.status = if (page.status == HttpServletResponse.SC_OK) actionStatus else page.status
+    resp.status = actionStatus
     resp.contentType = "text/html; charset=UTF-8"
     resp.writer.write(page.html)
 }

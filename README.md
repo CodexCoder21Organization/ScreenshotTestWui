@@ -52,15 +52,29 @@ cancelled session must be FAILED with its recorded cancellation error, and a del
 longer be listed. An unmatched selector shows no banner. Deleting an already absent session is
 idempotent in the service, so it may still return `303`; the banner says only that it is no longer
 listed. On failure, the originating page is rendered directly with an error banner holding the
-service's full message:
+service's reported message:
 `400` for a missing or malformed field or a locally typed value rejection, `404` for a typed unknown
 session, `409` for a typed wrong-state response, and `502` for a connection or other backend failure.
-The currently pinned UrlResolver wraps exceptions raised inside the remote service as
-`SandboxException` without a structured remote exception type, so those remote validation and state
-errors currently use `502` while still showing the full service message. This transport limitation
-needs a typed exception field before the WUI can distinguish them reliably.
+Through the `url://` client a service failure arrives as a `SandboxException`; the WUI classifies it
+by the exception class the service itself reported (`remoteExceptionClassName`, available from
+[UrlResolver](https://github.com/CodexCoder21Organization/UrlResolver) 0.0.1261 and
+[UrlProtocol](https://github.com/CodexCoder21Organization/UrlProtocol) 0.0.532) and shows the
+service's own message (the protocol caps the reported message at 4096 characters). The sandbox
+path matches only the exact names `java.lang.IllegalArgumentException` and
+`java.lang.IllegalStateException`; subclass names such as `java.lang.NumberFormatException`, names
+that merely contain those names, other classes, and missing reported classes use `502`. If the
+service reported a class but no message, the class name is shown. The message is HTML-escaped once.
+The same message selection and escaping apply to page loads, queued-session creation-time and
+results lookups, and notice verification.
+An action error keeps its classified HTTP status even when re-rendering its return page fails.
+For `GET /session?id=…`, a rejected-argument status call returns `404`; any other status-call
+failure returns `502`, with the same service-reported message.
 If the WUI cannot establish its API connection while loading `/`, `/workers`, or `/session`, that page
 also returns `502` and shows the connection error.
+The image endpoint keeps a separate contract: invalid query fields return `400`; a rejected
+argument on its first image probe, or an absent image, returns `404`; API acquisition and other
+first-probe failures return a descriptive text/plain `500`. After image streaming has committed a
+`200`, a later service failure aborts the body so the client detects the incomplete image.
 A POST that the browser labels as coming from another site (`Sec-Fetch-Site: cross-site` or
 `same-site`) is refused with `403`.
 
