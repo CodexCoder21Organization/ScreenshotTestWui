@@ -99,8 +99,8 @@ import screenshottest.api.ScreenshotTestApi
 
 
 
-fun cancelWrongStateThroughRealSandboxTest() {
-    val serviceId = "screenshottest-wui-cancel-conflict-${System.nanoTime()}"
+fun cancelOtherFailureThroughRealSandboxTest() {
+    val serviceId = "screenshottest-wui-cancel-other-${System.nanoTime()}"
     val classLoader = Thread.currentThread().contextClassLoader
     val implementationJar = requireNotNull(classLoader.getResourceAsStream("sandbox-client-impl.jar")) {
         "The sandbox fixture resource 'sandbox-client-impl.jar' is missing from the test classpath."
@@ -126,8 +126,8 @@ fun cancelWrongStateThroughRealSandboxTest() {
                         mapOf("sessionsJson" to "[]")
                     }
                     "cancelSession" -> {
-                        assertEquals(mapOf("sessionId" to "sess-c1", "reason" to "Cancelled from the management UI"), params, "cancelSession must use the production argument map.")
-                        throw IllegalStateException("Session 'sess-c1' is COMPLETED; only RUNNING sessions can be cancelled.")
+                        assertEquals(mapOf("sessionId" to "sess-other", "reason" to "Cancelled from the management UI"), params, "cancelSession must use the production argument map.")
+                        throw UnsupportedOperationException("backend exploded")
                     }
                     else -> throw IllegalArgumentException("Unexpected RPC '$path' with params $params.")
                 }
@@ -162,17 +162,18 @@ fun cancelWrongStateThroughRealSandboxTest() {
             conn.requestMethod = "POST"
             conn.doOutput = true
             conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded")
-            conn.outputStream.use { it.write("id=sess-c1&returnTo=list".toByteArray(Charsets.UTF_8)) }
+            conn.outputStream.use { it.write("id=sess-other&returnTo=list".toByteArray(Charsets.UTF_8)) }
             val responseStatus = conn.responseCode
             val responseBody = (if (responseStatus < 400) conn.inputStream else conn.errorStream)
                 .bufferedReader().use { it.readText() }
-            assertEquals(409, responseStatus, "Unexpected HTTP status; response body was:\n$responseBody")
+            assertEquals(502, responseStatus, "Unexpected HTTP status; response body was:\n$responseBody")
             assertEquals(null, conn.getHeaderField("Location"), "An error response must not redirect.")
             assertTrue(
-                responseBody.contains("""<span class="banner-text">Could not cancel session &#39;sess-c1&#39;: Session &#39;sess-c1&#39; is COMPLETED; only RUNNING sessions can be cancelled.</span>"""),
+                responseBody.contains("""<span class="banner-text">The screenshot service failed to cancel session &#39;sess-other&#39;: backend exploded</span>"""),
                 "Expected the complete service message in the banner; response was:\n$responseBody",
             )
-
+            assertTrue(responseBody.contains("<h1>Render Sessions</h1>"), "Expected the sessions page under the banner.")
+            assertFalse(responseBody.contains("Sandboxed code threw an exception:"), "The sandbox wrapper text must not be shown.")
         } finally {
             conn.disconnect()
         }

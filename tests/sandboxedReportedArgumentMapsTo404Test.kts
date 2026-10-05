@@ -26,10 +26,11 @@ import screenshottest.api.ScreenshotTestApi
 import java.net.HttpURLConnection
 import java.net.URL
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
-/** A SandboxException with no service-reported class stays an upstream failure. */
-fun sandboxedBackendFailuresMapToStatusesTest() {
+/** A reported IllegalArgumentException must be a 404, and only its service message is shown. */
+fun sandboxedReportedArgumentMapsTo404Test() {
     val api: ScreenshotTestApi = object : ScreenshotTestApi {
         override fun getRendererVersion(): String = throw UnsupportedOperationException()
         override fun createSession(label: String, mode: String, mainClass: String, scenariosJson: String): String = throw UnsupportedOperationException()
@@ -44,9 +45,9 @@ fun sandboxedBackendFailuresMapToStatusesTest() {
         override fun getWorkerPoolStatus(): String = throw UnsupportedOperationException()
         override fun setMaxWorkers(maxWorkers: Int) = throw UnsupportedOperationException()
         override fun cancelSession(sessionId: String, reason: String) {
-            assertEquals("sess-boom", sessionId)
+            assertEquals("sess-unknown", sessionId)
             assertEquals("Cancelled from the management UI", reason)
-            throw SandboxException("RPC to url://screenshottest/ timed out after 120s")
+            throw SandboxException("Sandboxed code threw an exception: java.lang.InternalError: wrapper text", RuntimeException("wrapper cause"), "java.lang.IllegalArgumentException", "No screenshot session with id 'sess-unknown'.")
         }
     }
     val server = createServer(0, api, ManualClock(1735689600000L))
@@ -59,17 +60,18 @@ fun sandboxedBackendFailuresMapToStatusesTest() {
             conn.requestMethod = "POST"
             conn.doOutput = true
             conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded")
-            conn.outputStream.use { it.write("id=sess-boom&returnTo=list".toByteArray(Charsets.UTF_8)) }
+            conn.outputStream.use { it.write("id=sess-unknown&returnTo=list".toByteArray(Charsets.UTF_8)) }
             val responseStatus = conn.responseCode
             val html = (if (responseStatus < 400) conn.inputStream else conn.errorStream)
                 .bufferedReader().use { it.readText() }
-            assertEquals(502, responseStatus, "A SandboxException without a reported class must be 502; page was:\n$html")
+            assertEquals(404, responseStatus, "The reported java.lang.IllegalArgumentException must be classified correctly; page was:\n$html")
             assertEquals(null, conn.getHeaderField("Location"), "An error response must not redirect.")
             assertTrue(
-                html.contains("""<span class="banner-text">The screenshot service failed to cancel session &#39;sess-boom&#39;: RPC to url://screenshottest/ timed out after 120s</span>"""),
-                "Expected the complete upstream message in the banner; page was:\n$html",
+                html.contains("""<span class="banner-text">Could not cancel session &#39;sess-unknown&#39;: No screenshot session with id &#39;sess-unknown&#39;.</span>"""),
+                "Expected the complete service message in the banner; page was:\n$html",
             )
             assertTrue(html.contains("<h1>Render Sessions</h1>"), "Expected the sessions page under the banner.")
+            assertFalse(html.contains("Sandboxed code threw an exception:"), "The sandbox wrapper text must not appear in the banner.")
         } finally {
             conn.disconnect()
         }

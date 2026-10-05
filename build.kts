@@ -169,8 +169,8 @@ val sandboxClientFixtureDependencies = resolveDependencies2(
 
 fun buildSandboxClientFixtureJar(): File {
     val artifact = buildSimpleKotlinMavenArtifact(
-        // 0.0.2: forwards the management calls (cancel/delete/setMaxWorkers/listSessions/getWorkerPoolStatus).
-        coordinates = "screenshottest.wui:screenshottest-wui-sandbox-client-fixture:0.0.2",
+        // 0.0.3: forwards image, management, and session-detail calls with the production argument maps and response keys.
+        coordinates = "screenshottest.wui:screenshottest-wui-sandbox-client-fixture:0.0.3",
         src = File("test-fixtures/sandbox-client"),
         compileDependencies = sandboxClientFixtureDependencies
     )
@@ -187,4 +187,16 @@ fun buildSandboxClientFixtureResourcesJar(): File {
         jos.closeEntry()
     }
     return tempFile
+}
+
+/** Provider exception for the single test that checks class names containing an expected class. */
+@MavenArtifactCoordinates("screenshottest.wui:screenshottest-wui-cancel-containing-class-name-test-support:")
+fun buildCancelContainingClassNameTestSupport(): File {
+    return buildSimpleKotlinMavenArtifact2(
+        coordinates = "screenshottest.wui:screenshottest-wui-cancel-containing-class-name-test-support:0.0.1",
+        src = File("tests/cancelContainingClassNameThroughRealSandboxTest"),
+        compileDependencies = listOf(
+            MavenPrebuilt2("org.jetbrains.kotlin:kotlin-stdlib:1.9.22"),
+        ),
+    ).jar
 }

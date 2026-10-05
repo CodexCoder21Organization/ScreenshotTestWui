@@ -77,7 +77,6 @@
 @file:WithArtifact("org.jetbrains.kotlin:kotlin-test:1.9.22")
 
 package screenshottest.wui
-import kotlin.test.*
 
 import build.kotlin.withartifact.WithArtifact
 import foundation.url.protocol.BootstrapPeer
@@ -85,76 +84,61 @@ import foundation.url.protocol.Libp2pPeer
 import foundation.url.protocol.ServiceHandler
 import foundation.url.resolver.UrlProtocol2
 import foundation.url.resolver.UrlResolver
-import screenshottest.api.ScreenshotTestApi
 import java.net.HttpURLConnection
 import java.net.URL
 import java.security.MessageDigest
-import java.util.concurrent.Callable
-import java.util.concurrent.Executors
-import java.util.concurrent.TimeUnit
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import kotlin.test.assertFalse
+import kotlin.test.assertFalse
+import kotlin.test.assertFalse
+import kotlin.test.assertFalse
+import screenshottest.api.ScreenshotTestApi
 
-/**
- * The management actions against a REAL `url://` provider through the WUI's SJVM sandbox proxy
- * (`UrlResolver.openSandboxedConnection`): the provider's own IllegalStateException /
- * IllegalArgumentException must reach the WUI as the service-reported class on the resulting
- * SandboxException, so a wrong-state cancel is 409, an unknown session is 404, and a rejected
- * max-workers value is 400 -- each banner carrying the service's own message -- while a failure the
- * service did not report stays 502.
- */
-@build.kotlin.annotations.Timeout(120)
-fun managementActionsThroughRealSandboxedProviderTest() {
-    val serviceId = "screenshottest-wui-real-provider-actions-${System.nanoTime()}"
+
+
+
+
+fun cancelNumberFormatExceptionThroughRealSandboxTest() {
+    val serviceId = "screenshottest-wui-cancel-number-format-${System.nanoTime()}"
     val classLoader = Thread.currentThread().contextClassLoader
-    fun requiredResource(name: String): ByteArray =
-        requireNotNull(classLoader.getResourceAsStream(name)) {
-            "The sandbox fixture resource '$name' is missing from the test classpath."
-        }.use { it.readBytes() }
-    val implementationJar = requiredResource("sandbox-client-impl.jar")
-    val stdlibJar = requiredResource("stdlib.jar")
+    val implementationJar = requireNotNull(classLoader.getResourceAsStream("sandbox-client-impl.jar")) {
+        "The sandbox fixture resource 'sandbox-client-impl.jar' is missing from the test classpath."
+    }.use { it.readBytes() }
+    val stdlibJar = requireNotNull(classLoader.getResourceAsStream("stdlib.jar")) {
+        "The sandbox fixture resource 'stdlib.jar' is missing from the test classpath."
+    }.use { it.readBytes() }
     val implementationJarDigest = MessageDigest.getInstance("SHA-256").digest(implementationJar)
         .joinToString("") { "%02x".format(it.toInt() and 0xff) }
-    val sessionsJson = """[{"sessionId":"sess-c1","label":"completed one","mode":"compare","state":"COMPLETED","createdAt":1735685900000,"rendererVersion":"chromium-1228","queuePosition":null,"startedAt":1735686000000,"finishedAt":1735686090000}]"""
-    val poolJson = """{"maxWorkers":3,"activeWorkers":0,"queuedSessions":0,"running":[],"queued":[]}"""
-    val handler = object : ServiceHandler {
-        override suspend fun handleRequest(path: String, params: Map<String, Any?>, metadata: Map<String, String>): Any? =
-            when (path) {
-                "listSessions" -> mapOf("json" to sessionsJson)
-                "getWorkerPoolStatus" -> mapOf("json" to poolJson)
-                "cancelSession" -> when (params["sessionId"]) {
-                    "sess-c1" -> throw IllegalStateException("Session 'sess-c1' is COMPLETED; only RUNNING sessions can be cancelled.")
-                    "sess-unknown" -> throw IllegalArgumentException("No screenshot session with id 'sess-unknown'.")
-                    else -> throw UnsupportedOperationException("backend exploded")
-                }
-                "deleteSession" -> throw IllegalStateException("Session '${params["sessionId"]}' is RUNNING; cancel it before deleting it.")
-                "setMaxWorkers" -> throw IllegalArgumentException("maxWorkers must be between 1 and 16, but was ${params["maxWorkers"]}.")
-                else -> throw IllegalArgumentException("Unexpected RPC '$path'.")
-            }
-        override fun onShutdown() = Unit
-        override fun getImplementationJar(): ByteArray = implementationJar
-        override fun getImplementationClassName(): String = "screenshottest.wui.testfixtures.SandboxedScreenshotTestClient"
-        override fun getImplementationJarDigest(): String = implementationJarDigest
-        override fun getStdlibJar(): ByteArray = stdlibJar
-        override fun supportsSandboxedExecution(): Boolean = true
-    }
-    fun post(port: Int, path: String, form: String): HttpURLConnection {
-        val conn = URL("http://localhost:$port$path").openConnection() as HttpURLConnection
-        conn.instanceFollowRedirects = false
-        conn.requestMethod = "POST"
-        conn.doOutput = true
-        conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded")
-        conn.outputStream.use { it.write(form.toByteArray(Charsets.UTF_8)) }
-        return conn
-    }
-    fun bodyOf(conn: HttpURLConnection): String =
-        (if (conn.responseCode < 400) conn.inputStream else conn.errorStream).bufferedReader().readText()
-    val provider = UrlProtocol2(emptyList<BootstrapPeer>(), eagerlyJoinNetwork = false, listenPort = 0)
+    var provider: UrlProtocol2? = null
+    var clientProtocol: UrlProtocol2? = null
     var resolver: UrlResolver? = null
     var server: org.eclipse.jetty.server.Server? = null
     try {
-        val providerInfo = provider.joinNetwork(alias = "$serviceId-provider")
-        provider.registerGlobalService(serviceUrl = "url://$serviceId/", handler = handler)
+        val providerNode = UrlProtocol2(emptyList<BootstrapPeer>(), eagerlyJoinNetwork = false, listenPort = 0)
+        provider = providerNode
+        val providerInfo = providerNode.joinNetwork(alias = "$serviceId-provider")
+        val handler = object : ServiceHandler {
+            override suspend fun handleRequest(path: String, params: Map<String, Any?>, metadata: Map<String, String>): Any? =
+                when (path) {
+                    "listSessions" -> {
+                        assertEquals(emptyMap<String, Any?>(), params, "listSessions must use the service's empty argument map.")
+                        mapOf("sessionsJson" to "[]")
+                    }
+                    "cancelSession" -> {
+                        assertEquals(mapOf("sessionId" to "sess-1", "reason" to "Cancelled from the management UI"), params, "cancelSession must use the production argument map.")
+                        throw NumberFormatException("not a number")
+                    }
+                    else -> throw IllegalArgumentException("Unexpected RPC '$path' with params $params.")
+                }
+            override fun onShutdown() = Unit
+            override fun getImplementationJar(): ByteArray = implementationJar
+            override fun getImplementationClassName(): String = "screenshottest.wui.testfixtures.SandboxedScreenshotTestClient"
+            override fun getImplementationJarDigest(): String = implementationJarDigest
+            override fun getStdlibJar(): ByteArray = stdlibJar
+            override fun supportsSandboxedExecution(): Boolean = true
+        }
+        providerNode.registerGlobalService(serviceUrl = "url://$serviceId/", handler = handler)
         val providerPeer = Libp2pPeer.remote(
             peerId = providerInfo.peerId,
             multiaddresses = providerInfo.multiaddresses
@@ -162,43 +146,41 @@ fun managementActionsThroughRealSandboxedProviderTest() {
                 .map { it.replace(Regex("/ip4/[0-9.]+/"), "/ip4/127.0.0.1/") },
             advertisedServices = listOf(serviceId),
         )
-        val clientResolver = UrlResolver(UrlProtocol2(listOf(providerPeer), eagerlyJoinNetwork = false, listenPort = 0))
+        val clientNode = UrlProtocol2(listOf(providerPeer), eagerlyJoinNetwork = false, listenPort = 0)
+        clientProtocol = clientNode
+        val clientResolver = UrlResolver(clientNode)
         resolver = clientResolver
+        clientProtocol = null
         val api = clientResolver.openSandboxedConnection("url://$serviceId/", ScreenshotTestApi::class)
         val wui = createServer(0, api)
         server = wui
         wui.start()
         val port = (wui.connectors[0] as org.eclipse.jetty.server.ServerConnector).localPort
+        val conn = URL("http://localhost:$port/session/cancel").openConnection() as HttpURLConnection
+        try {
+            conn.instanceFollowRedirects = false
+            conn.requestMethod = "POST"
+            conn.doOutput = true
+            conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded")
+            conn.outputStream.use { it.write("id=sess-1&returnTo=list".toByteArray(Charsets.UTF_8)) }
+            val responseStatus = conn.responseCode
+            val responseBody = (if (responseStatus < 400) conn.inputStream else conn.errorStream)
+                .bufferedReader().use { it.readText() }
+            assertEquals(502, responseStatus, "Unexpected HTTP status; response body was:\n$responseBody")
+            assertEquals(null, conn.getHeaderField("Location"), "An error response must not redirect.")
+            assertTrue(
+                responseBody.contains("""<span class="banner-text">The screenshot service failed to cancel session &#39;sess-1&#39;: not a number</span>"""),
+                "Expected the complete service message in the banner; response was:\n$responseBody",
+            )
 
-        val conflict = post(port, "/session/cancel", "id=sess-c1&returnTo=list")
-        val conflictHtml = bodyOf(conflict)
-        assertEquals(409, conflict.responseCode, "A wrong-state cancel through the real sandbox must be 409; page was:\n$conflictHtml")
-        assertTrue(conflictHtml.contains("""<span class="banner-text">Could not cancel session &#39;sess-c1&#39;: Session &#39;sess-c1&#39; is COMPLETED; only RUNNING sessions can be cancelled.</span>"""),
-            "Expected the service's own message in the banner; page was:\n$conflictHtml")
-
-        val unknown = post(port, "/session/cancel", "id=sess-unknown&returnTo=list")
-        val unknownHtml = bodyOf(unknown)
-        assertEquals(404, unknown.responseCode, "An unknown session through the real sandbox must be 404; page was:\n$unknownHtml")
-        assertTrue(unknownHtml.contains("""<span class="banner-text">Could not cancel session &#39;sess-unknown&#39;: No screenshot session with id &#39;sess-unknown&#39;.</span>"""),
-            "Expected the service's own message in the banner; page was:\n$unknownHtml")
-
-        val delete = post(port, "/session/delete", "id=sess-r1&returnTo=list")
-        val deleteHtml = bodyOf(delete)
-        assertEquals(409, delete.responseCode, "A wrong-state delete through the real sandbox must be 409; page was:\n$deleteHtml")
-        assertTrue(deleteHtml.contains("Session &#39;sess-r1&#39; is RUNNING; cancel it before deleting it."),
-            "Expected the service's own message in the banner; page was:\n$deleteHtml")
-
-        val maxWorkers = post(port, "/workers/max", "maxWorkers=99")
-        val maxWorkersHtml = bodyOf(maxWorkers)
-        assertEquals(400, maxWorkers.responseCode, "A rejected max-workers value through the real sandbox must be 400; page was:\n$maxWorkersHtml")
-        assertTrue(maxWorkersHtml.contains("The screenshot service rejected max workers 99: maxWorkers must be between 1 and 16, but was 99."),
-            "Expected the service's own message in the banner; page was:\n$maxWorkersHtml")
-
-        val other = post(port, "/session/cancel", "id=sess-other&returnTo=list")
-        assertEquals(502, other.responseCode, "A failure the service reports as any other class stays 502.")
+        } finally {
+            conn.disconnect()
+        }
     } finally {
         try { server?.stop() } finally {
-            try { resolver?.close() } finally { provider.close() }
+            try { resolver?.close() } finally {
+                try { clientProtocol?.close() } finally { provider?.close() }
+            }
         }
     }
 }

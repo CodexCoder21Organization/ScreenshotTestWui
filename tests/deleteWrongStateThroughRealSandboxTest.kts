@@ -99,8 +99,8 @@ import screenshottest.api.ScreenshotTestApi
 
 
 
-fun cancelWrongStateThroughRealSandboxTest() {
-    val serviceId = "screenshottest-wui-cancel-conflict-${System.nanoTime()}"
+fun deleteWrongStateThroughRealSandboxTest() {
+    val serviceId = "screenshottest-wui-delete-conflict-${System.nanoTime()}"
     val classLoader = Thread.currentThread().contextClassLoader
     val implementationJar = requireNotNull(classLoader.getResourceAsStream("sandbox-client-impl.jar")) {
         "The sandbox fixture resource 'sandbox-client-impl.jar' is missing from the test classpath."
@@ -125,9 +125,9 @@ fun cancelWrongStateThroughRealSandboxTest() {
                         assertEquals(emptyMap<String, Any?>(), params, "listSessions must use the service's empty argument map.")
                         mapOf("sessionsJson" to "[]")
                     }
-                    "cancelSession" -> {
-                        assertEquals(mapOf("sessionId" to "sess-c1", "reason" to "Cancelled from the management UI"), params, "cancelSession must use the production argument map.")
-                        throw IllegalStateException("Session 'sess-c1' is COMPLETED; only RUNNING sessions can be cancelled.")
+                    "deleteSession" -> {
+                        assertEquals(mapOf("sessionId" to "sess-r1"), params, "deleteSession must use the production argument map.")
+                        throw IllegalStateException("Session 'sess-r1' is RUNNING; cancel it before deleting it.")
                     }
                     else -> throw IllegalArgumentException("Unexpected RPC '$path' with params $params.")
                 }
@@ -156,20 +156,20 @@ fun cancelWrongStateThroughRealSandboxTest() {
         server = wui
         wui.start()
         val port = (wui.connectors[0] as org.eclipse.jetty.server.ServerConnector).localPort
-        val conn = URL("http://localhost:$port/session/cancel").openConnection() as HttpURLConnection
+        val conn = URL("http://localhost:$port/session/delete").openConnection() as HttpURLConnection
         try {
             conn.instanceFollowRedirects = false
             conn.requestMethod = "POST"
             conn.doOutput = true
             conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded")
-            conn.outputStream.use { it.write("id=sess-c1&returnTo=list".toByteArray(Charsets.UTF_8)) }
+            conn.outputStream.use { it.write("id=sess-r1&returnTo=list".toByteArray(Charsets.UTF_8)) }
             val responseStatus = conn.responseCode
             val responseBody = (if (responseStatus < 400) conn.inputStream else conn.errorStream)
                 .bufferedReader().use { it.readText() }
             assertEquals(409, responseStatus, "Unexpected HTTP status; response body was:\n$responseBody")
             assertEquals(null, conn.getHeaderField("Location"), "An error response must not redirect.")
             assertTrue(
-                responseBody.contains("""<span class="banner-text">Could not cancel session &#39;sess-c1&#39;: Session &#39;sess-c1&#39; is COMPLETED; only RUNNING sessions can be cancelled.</span>"""),
+                responseBody.contains("""<span class="banner-text">Could not delete session &#39;sess-r1&#39;: Session &#39;sess-r1&#39; is RUNNING; cancel it before deleting it.</span>"""),
                 "Expected the complete service message in the banner; response was:\n$responseBody",
             )
 
