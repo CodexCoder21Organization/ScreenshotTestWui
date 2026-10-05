@@ -43,3 +43,6 @@ Full remote suite submitted at 2026-10-05 13:44:53 UTC via scripts/test.bash --r
 
 13:45 UTC — OBSERVED: all9 individual selectors passed, including both final numeric-map image retests. Full remote suite connected with health OK at13:44:53, but has not yet supplied a run id. Source head unchanged, working tree clean.
 INFER: no test/code fix is needed based on individual results. The remote40-minute fallback threshold is14:24:53, later than the job14:22:45 deadline; unless remote exits earlier, the explicit50-minute stop takes precedence. Full-suite result remains OPEN until actual counts arrive.
+
+13:50 UTC — OBSERVED: remote still emits only connection/health lines. Own CLI PID123652 jstack shows RemoteBuildWorkspace.execute:152 polling. Exact installed manager0.0.85 bytecode reads submission runId, then polls getBuildRun without printing the ID. Dashboard /api/runs reports outOfDate=true, runMembershipReconciled=false and only QF12:54 WUI runs; neither is assumed to be ours. BuildTestCli README exposes a direct list command, but repository-declared artifact0.0.3 is not published (resolution reports not found).
+INFER: silence does not prove submission failed; the pinned runner lacks run-id progress output. I am checking the direct read-only listing rather than inventing an id or resubmitting. No changes to service, dependency pins or runner scripts.
