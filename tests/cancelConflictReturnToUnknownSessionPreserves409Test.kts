@@ -187,6 +187,8 @@ fun cancelConflictReturnToUnknownSessionPreserves409Test() {
                 val escaped = expectedText.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;").replace("'", "&#39;")
                 val displayed = Regex("""<span class="banner-text">([^<]*)</span>""").find(html)?.groupValues?.get(1)
                 assertEquals(escaped, displayed, html)
+                assertNotNull(statusFailure.get(), html)
+                assertTrue(html.contains("Failed to load session \"sess-1\": No screenshot session with id &#39;sess-1&#39;."), html)
             } finally { conn.disconnect() }
     } finally {
         responseGate.complete(Unit)

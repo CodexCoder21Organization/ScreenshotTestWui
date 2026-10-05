@@ -43,8 +43,8 @@ class SessionDetailServlet : HttpServlet() {
 }
 
 /**
- * Renders session [id]'s detail page with an optional [banner]. A session the service cannot load
- * yields a `404` error page that still carries [banner].
+ * Renders session [id]'s detail page with an optional [banner]. A rejected session id yields
+ * `404`; other status-call failures yield `502`. Both error pages still carry [banner].
  */
 fun renderSessionDetailPage(
     api: ScreenshotTestApi, nowMs: Long, id: String, banner: Banner?,
@@ -54,8 +54,9 @@ fun renderSessionDetailPage(
         JSONObject(api.getSessionStatus(id))
     } catch (e: Exception) {
         return PageResult(
-            HttpServletResponse.SC_NOT_FOUND,
-            errorPage("Failed to load session \"${escapeHtml(id)}\": ${escapeHtml(e.message ?: e.javaClass.name)}", banner),
+            if (classifyBackendFailureKind(e) == BackendFailureKind.REJECTED_ARGUMENT)
+                HttpServletResponse.SC_NOT_FOUND else HttpServletResponse.SC_BAD_GATEWAY,
+            errorPage("Failed to load session \"${escapeHtml(id)}\": ${escapeHtml(backendFailureMessage(e))}", banner),
         )
     }
 

@@ -102,6 +102,7 @@ fun cancelConflictReturnToFailedListPreserves409Test() {
     val stdlibJar = requireNotNull(classLoader.getResourceAsStream("stdlib.jar")).use { it.readBytes() }
     val implementationJarDigest = MessageDigest.getInstance("SHA-256").digest(implementationJar)
         .joinToString("") { "%02x".format(it.toInt() and 0xff) }
+    val pageReadCount = java.util.concurrent.atomic.AtomicInteger()
     val actionFailure = java.util.concurrent.atomic.AtomicReference<Exception>()
     val statusFailure = java.util.concurrent.atomic.AtomicReference<Exception>()
     val entered = java.util.concurrent.CountDownLatch(1)
@@ -110,6 +111,7 @@ fun cancelConflictReturnToFailedListPreserves409Test() {
         override suspend fun handleRequest(path: String, params: Map<String, Any?>, metadata: Map<String, String>): Any? {
             return when (path) {
                 "listSessions" -> {
+                    pageReadCount.incrementAndGet()
                     assertEquals(emptyMap(), params)
                     throw UnsupportedOperationException("list read failed")
                 }
@@ -187,6 +189,8 @@ fun cancelConflictReturnToFailedListPreserves409Test() {
                 val escaped = expectedText.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;").replace("'", "&#39;")
                 val displayed = Regex("""<span class="banner-text">([^<]*)</span>""").find(html)?.groupValues?.get(1)
                 assertEquals(escaped, displayed, html)
+                assertEquals(1, pageReadCount.get(), html)
+                assertTrue(html.contains("Failed to load sessions:"), html)
             } finally { conn.disconnect() }
     } finally {
         responseGate.complete(Unit)

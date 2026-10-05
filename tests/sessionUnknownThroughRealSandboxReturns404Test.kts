@@ -180,10 +180,11 @@ fun sessionUnknownThroughRealSandboxReturns404Test() {
                 val html = (if (code < 400) conn.inputStream else conn.errorStream).bufferedReader().use { it.readText() }
                 assertEquals(404, code, html)
                 assertNull(conn.getHeaderField("Location"))
-                val expectedText = "Failed to load session \"sess-1\": No screenshot session with id 'sess-1'."
-                val escaped = expectedText.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;").replace("'", "&#39;")
+                val expectedMessage = "No screenshot session with id 'sess-1'."
+                val escapedMessage = expectedMessage.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;").replace("'", "&#39;")
+                val expectedText = "Failed to load session \"sess-1\": $escapedMessage"
                 val displayed = Regex("""<div class="info-value text-red">([^<]*)</div>""").find(html)?.groupValues?.get(1)
-                assertEquals(escaped, displayed, html)
+                assertEquals(expectedText, displayed, html)
             } finally { conn.disconnect() }
     } finally {
         responseGate.complete(Unit)

@@ -180,10 +180,11 @@ fun sessionOtherFailureThroughRealSandboxReturns502Test() {
                 val html = (if (code < 400) conn.inputStream else conn.errorStream).bufferedReader().use { it.readText() }
                 assertEquals(502, code, html)
                 assertNull(conn.getHeaderField("Location"))
-                val expectedText = "Failed to load session \"sess-1\": status read failed"
-                val escaped = expectedText.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;").replace("'", "&#39;")
+                val expectedMessage = "status read failed"
+                val escapedMessage = expectedMessage.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;").replace("'", "&#39;")
+                val expectedText = "Failed to load session \"sess-1\": $escapedMessage"
                 val displayed = Regex("""<div class="info-value text-red">([^<]*)</div>""").find(html)?.groupValues?.get(1)
-                assertEquals(escaped, displayed, html)
+                assertEquals(expectedText, displayed, html)
             } finally { conn.disconnect() }
     } finally {
         responseGate.complete(Unit)
