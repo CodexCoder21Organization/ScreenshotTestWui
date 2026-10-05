@@ -95,7 +95,7 @@ import java.util.concurrent.TimeUnit
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
-fun imageApiAcquisitionThroughRealProviderReturnsDescriptive500Test() {
+fun imageBytecodeUnavailableThroughRealProviderReturnsDescriptive500Test() {
     val serviceId = "wui-review-${System.nanoTime()}"
     val classLoader = Thread.currentThread().contextClassLoader
     val implementationJar = requireNotNull(classLoader.getResourceAsStream("sandbox-client-impl.jar")).use { it.readBytes() }
@@ -163,15 +163,15 @@ fun imageApiAcquisitionThroughRealProviderReturnsDescriptive500Test() {
         clientProtocol = protocol
         val client = UrlResolver(protocol)
         resolver = client
-        val acquisitionFailure = java.util.concurrent.atomic.AtomicReference<Exception>()
-        val wui = createServer(0) {
-            try {
-                client.openSandboxedConnection("url://$serviceId/", ScreenshotTestApi::class)
-            } catch (e: Exception) {
-                acquisitionFailure.set(e)
-                throw e
+        val probeFailure = java.util.concurrent.atomic.AtomicReference<Exception>()
+        val proxy = client.openSandboxedConnection("url://$serviceId/", ScreenshotTestApi::class)
+        val api = object : ScreenshotTestApi by proxy {
+            override fun getImageChunk(sessionId: String, key: String, kind: String, offset: Long, length: Int): ByteArray? {
+                try { return proxy.getImageChunk(sessionId, key, kind, offset, length) }
+                catch (e: Exception) { probeFailure.set(e); throw e }
             }
         }
+        val wui = createServer(0, api)
         server = wui
         wui.start()
         val port = (wui.connectors[0] as org.eclipse.jetty.server.ServerConnector).localPort
@@ -185,7 +185,7 @@ fun imageApiAcquisitionThroughRealProviderReturnsDescriptive500Test() {
                 assertNull(conn.getHeaderField("Location"))
                 assertEquals("text/plain;charset=utf-8", conn.contentType.lowercase().replace(" ", ""))
                 assertTrue(bytecodeRequested.get(), html)
-                val failure = requireNotNull(acquisitionFailure.get())
+                val failure = requireNotNull(probeFailure.get())
                 val sandboxFailure = failure as? foundation.url.protocol.sandbox.SandboxException
                 val expectedMessage = if (sandboxFailure?.remoteExceptionClassName != null)
                     sandboxFailure.remoteExceptionMessage ?: sandboxFailure.remoteExceptionClassName!!
