@@ -70,3 +70,31 @@ INFER: if service polling remains responsive but nonterminal, the original comma
 
 Also OBSERVED: canonical CI run46141aba at exact requested4b6e1d629177f91a2e329db91094adcc8037ea3b is COMPLETED,70passed/0failed/70total, submitted13:31:39.903 and completed13:48:25.627. Its notes name the full PR/commit URLs and say one shard did not finish provisioning, surviving shards completed queued tests. https://buildtest.kotlin.build/run?id=46141aba . Informational route run16ab88c7 at same head is PENDING and is not used as the required gate. The previously OPEN check-start premise is refuted by this live completed CI evidence.
 INFER: final-source full-suite proof already exists in canonical CI; own submitted suite remains pending and is still watched separately. No run has been rerun or deleted.
+
+## FINAL — 2026-10-05 14:06:29 UTC
+
+Final source head: 4b6e1d629177f91a2e329db91094adcc8037ea3b
+Commit: https://github.com/CodexCoder21Organization/ScreenshotTestWui/commit/4b6e1d629177f91a2e329db91094adcc8037ea3b
+PR: https://github.com/CodexCoder21Organization/ScreenshotTestWui/pull/4 (live OPEN; body PATCHed and re-read/verified, including required footer).
+
+The complete nine-scenario PASS1/1 table and durations are above. Every named per-test XML record matches the requested scenario. No testcase failed and no source change was needed.
+
+| Full-suite run | Attribution | Result |
+|---|---|---|
+| https://buildtest.kotlin.build/run?id=46141aba | Required CI explicitly names exact final head 4b6e1d629177f91a2e329db91094adcc8037ea3b | COMPLETED:70passed/0failed/70total; GitHub completed/success, All tests passing(70/70) |
+| https://buildtest.kotlin.build/run?id=b4c1371b | QF2 prescribed command submitted once at13:44:53, service start13:44:59.258UTC | Last observed PENDING:0passed/0failed/70total (in-flight counts, NOT final); client exited1 on getBuildRun RPC30-second failure; terminal verdict OPEN |
+
+Brief item states:
+1. DONE: all9 final-source individual selectors passed; complete durations/results recorded above.
+2. DONE: no failing testcase required a fix. No assertion, timeout, count, sleep, skip or pin change.
+3. DONE for final-source validation: exact-head required full suite70/70 is proven by live completed CI run46141aba and GitHub check metadata. The previous OPEN premise that final-source full-suite validation/check start is absent is REFUTED by this evidence. QF2 separately submitted the prescribed full command once and recovered its ID at the first successful bounded page; that submission has no observed final verdict, is recorded OPEN and is never claimed70/70. The40-minute fallback threshold14:24:53 is after the50-minute deadline14:22:45, and the explicit stop condition says not to perform further verification after the gate exists; no local fallback batches launched.
+4. DONE: source unchanged; only PR body updated with9results, exact-head full counts, resolved prior full/check-start entries and separate-submission OPEN. Supplied WHY, review mapping, screenshots and required footer retained. No PR-branch push needed. Evidence-only commits on wip/qf2-pr4-validation were pushed and ls-remote checked at each milestone.
+5. DONE: final head and complete results in FINDINGS; clean worktree; every own local test/probe process exited and watcher stopped (tracked exit130). ps -eo pid,ppid,args -ww captured in /tmp/qf2-processes-final.txt; no own qf2-targets, Qf2BuildRunRead or b4c1371b watcher remains. Remote run itself was not cancelled/deleted/restarted/resubmitted.
+
+OPEN execution record: QF2 remote runb4c1371b has no confirmed terminal verdict. Final-source validation itself is complete via nine individual local passes and required canonical CI70/70 on the unchanged requested head.
+
+Observed monitoring limitations: installed runner does not print run ID; whole-list RPC hit service30-second handler limit (full stack above); stale dashboard made watchman report not-found even though bounded RPC proved the run exists; repository-declared BuildTestCli0.0.3 is unpublished. The bounded public RPC page was the successful workaround. report-challenge auto-merges to PlanRepository, so it was excluded by this job's explicit no-merging rule.
+
+Documents read: project README; PR body/review mapping/OPEN; prior QF findings including final section and cache correction; Testing architecture in full; exact installed manager0.0.85 bytecode; relevant BuildTestCli README/list implementation, BuildTestApi listing/lifecycle sections and BuildTestServerService paginated-route implementation.
+
+No source/test/README/pin edits. Resolver0.0.1261/protocol0.0.532 retained. No CI rerun, merge, enqueue, artifact publication, deployment or service restart. No further verification started after the exact-head full gate was proven. Status loop was not scheduled under this one-job exit brief; local watcher stopped.
