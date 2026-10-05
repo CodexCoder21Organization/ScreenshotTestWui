@@ -175,7 +175,7 @@ fun sessionOtherFailureThroughRealSandboxReturns502Test() {
         val conn = URL("http://localhost:$port/session?id=sess-1").openConnection() as HttpURLConnection
             try {
                 conn.instanceFollowRedirects = false
-                
+
                 val code = conn.responseCode
                 val html = (if (code < 400) conn.inputStream else conn.errorStream).bufferedReader().use { it.readText() }
                 assertEquals(502, code, html)

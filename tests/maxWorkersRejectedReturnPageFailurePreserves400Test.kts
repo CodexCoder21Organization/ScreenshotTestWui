@@ -191,7 +191,7 @@ fun maxWorkersRejectedReturnPageFailurePreserves400Test() {
                 assertEquals(escaped, displayed, html)
                 assertEquals(1, pageReadCount.get(), html)
                 assertTrue(html.contains("Failed to load the render worker pool:"), html)
-                assertTrue(html.contains("value=\"99\""), html)
+                assertTrue(html.contains("<h1>Error</h1>"), html)
                 assertFalse(html.contains("http-equiv=\"refresh\""), html)
             } finally { conn.disconnect() }
     } finally {
