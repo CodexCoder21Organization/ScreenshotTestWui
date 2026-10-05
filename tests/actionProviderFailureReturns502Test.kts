@@ -23,25 +23,37 @@ fun actionProviderFailureReturns502Test() {
     val server = createServer(0, ManualClock(1735689600000L)) {
         throw IllegalStateException("connection failed")
     }
-    server.start()
     try {
+        server.start()
         val port = (server.connectors[0] as org.eclipse.jetty.server.ServerConnector).localPort
-        for ((path, form) in listOf(
-            "/session/cancel" to "id=sess-1",
-            "/session/delete" to "id=sess-1",
-            "/workers/max" to "maxWorkers=3",
-            "/session/cancel" to "",
-            "/session/delete" to "",
-            "/workers/max" to "maxWorkers=invalid",
+        for ((path, form, expectedStatus) in listOf(
+            Triple("/session/cancel", "id=sess-1", 502),
+            Triple("/session/delete", "id=sess-1", 502),
+            Triple("/workers/max", "maxWorkers=3", 502),
+            Triple("/session/cancel", "", 400),
+            Triple("/session/delete", "", 400),
+            Triple("/workers/max", "maxWorkers=invalid", 400),
         )) {
             val conn = URL("http://localhost:$port$path").openConnection() as HttpURLConnection
-            conn.requestMethod = "POST"
-            conn.doOutput = true
-            conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded")
-            conn.outputStream.use { it.write(form.toByteArray()) }
-            assertEquals(502, conn.responseCode, "A provider failure for $path must return 502")
-            val body = conn.errorStream.bufferedReader().readText()
-            assertTrue(body.contains("connection failed"), "The provider's full message must appear in the page: $body")
+            try {
+                conn.instanceFollowRedirects = false
+                conn.requestMethod = "POST"
+                conn.doOutput = true
+                conn.setRequestProperty("Content-Type", "application/x-www-form-urlencoded")
+                conn.outputStream.use { it.write(form.toByteArray()) }
+                assertEquals(expectedStatus, conn.responseCode, "The action status for $path must survive a provider failure")
+                assertNull(conn.getHeaderField("Location"))
+                val body = conn.errorStream.bufferedReader().use { it.readText() }
+                val expectedBanner = when {
+                    form.isEmpty() && path.endsWith("cancel") -> "Cannot cancel: the form is missing the required field &quot;id&quot; (the session id to cancel)."
+                    form.isEmpty() -> "Cannot delete: the form is missing the required field &quot;id&quot; (the session id to delete)."
+                    form == "maxWorkers=invalid" -> "Cannot set max workers: &quot;maxWorkers&quot; must be a whole number, but was &quot;invalid&quot;."
+                    path.endsWith("cancel") -> "The screenshot service failed to cancel session &#39;sess-1&#39;: connection failed"
+                    path.endsWith("delete") -> "The screenshot service failed to delete session &#39;sess-1&#39;: connection failed"
+                    else -> "The screenshot service failed to set max workers to 3: connection failed"
+                }
+                assertEquals(expectedBanner, Regex("""<span class="banner-text">([^<]*)</span>""").find(body)?.groupValues?.get(1), body)
+            } finally { conn.disconnect() }
         }
         for ((path, expectedError) in listOf(
             "/" to "Failed to load sessions: connection failed",
@@ -49,11 +61,13 @@ fun actionProviderFailureReturns502Test() {
             "/session?id=sess-1" to "Failed to load session \"sess-1\": connection failed",
         )) {
             val conn = URL("http://localhost:$port$path").openConnection() as HttpURLConnection
+            try {
             assertEquals(502, conn.responseCode, "A provider failure while loading $path must return 502")
-            val body = conn.errorStream.bufferedReader().readText()
+            val body = conn.errorStream.bufferedReader().use { it.readText() }
             val displayedError = Regex("""<div class="info-value text-red">([^<]*)</div>""")
                 .find(body)?.groupValues?.get(1)
             assertEquals(expectedError, displayedError, "The page for $path must show the complete provider error")
+            } finally { conn.disconnect() }
         }
     } finally {
         server.stop()
