@@ -1,0 +1,15 @@
+# QF2 validation
+
+Started 2026-10-05 13:32:45 UTC. Deadline 14:22:45 UTC.
+PR: https://github.com/CodexCoder21Organization/ScreenshotTestWui/pull/4
+Verified OPEN at 4b6e1d629177f91a2e329db91094adcc8037ea3b.
+
+Plan:
+1. COMPLETE: fresh checkout, head/OPEN confirmation, README, PR body and prior final notes.
+2. IN PROGRESS: run nine named scenarios individually against final source; record named result and duration.
+3. TODO: diagnose and fix any failure without changing pins, assertions, counts or timeouts; one commit per fix.
+4. TODO: submit full remote suite, record run id immediately, fall back to local file batches after 40 minutes.
+5. TODO: update PR validation/OPEN, final results/head/process check and exit within 50 minutes.
+
+OBSERVED: Previous QF final notes list 21/30 scenarios passed and nine open, plus full suite open. Last edit corrects numeric map conversion in both image probes. README and PR body agree with the brief invariants.
+INFER: Nine tests are validation work, with no source change needed unless a run demonstrates a defect. Dependency pins remain resolver 0.0.1261 / protocol 0.0.532.
