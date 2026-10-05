@@ -35,3 +35,11 @@ INFER: normalized numeric map now reaches the intended provider exception; no as
 | `sandboxedBackendFailuresMapToStatusesTest` | PASS 1/1 | 3.583s | /tmp/qf2-sandboxedBackendFailuresMapToStatusesTest.xml |
 | `sandboxedReportedArgumentMapsTo404Test` | PASS 1/1 | 2.985s | /tmp/qf2-sandboxedReportedArgumentMapsTo404Test.xml |
 | `sandboxedReportedStateMapsTo409Test` | PASS 1/1 | 1.685s | /tmp/qf2-sandboxedReportedStateMapsTo409Test.xml |
+
+OBSERVED: All nine named scenarios passed individually; every XML per-test line names the exact requested scenario. Source remained unchanged.
+INFER: No fix is indicated by these results. Plan step 2 COMPLETE; step 3 COMPLETE (no failures); step 4 IN PROGRESS.
+
+Full remote suite submitted at 2026-10-05 13:44:53 UTC via scripts/test.bash --remote --test . --log full.xml. Run id pending command output.
+
+13:45 UTC — OBSERVED: all9 individual selectors passed, including both final numeric-map image retests. Full remote suite connected with health OK at13:44:53, but has not yet supplied a run id. Source head unchanged, working tree clean.
+INFER: no test/code fix is needed based on individual results. The remote40-minute fallback threshold is14:24:53, later than the job14:22:45 deadline; unless remote exits earlier, the explicit50-minute stop takes precedence. Full-suite result remains OPEN until actual counts arrive.
