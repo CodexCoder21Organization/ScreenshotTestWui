@@ -174,12 +174,11 @@ private fun HttpServlet.renderActionError(
 }
 
 /**
- * Writes [page] with the action's [actionStatus] — unless re-rendering the page itself failed (e.g.
- * the backend is down, `502`), in which case that failure's status wins; the page carries the
- * action's banner either way.
+ * Writes [page] with the action's [actionStatus]. A return-page failure adds error content but
+ * does not change the status of the action that the caller submitted.
  */
 private fun writePage(resp: HttpServletResponse, page: PageResult, actionStatus: Int) {
-    resp.status = if (page.status == HttpServletResponse.SC_OK) actionStatus else page.status
+    resp.status = actionStatus
     resp.contentType = "text/html; charset=UTF-8"
     resp.writer.write(page.html)
 }
