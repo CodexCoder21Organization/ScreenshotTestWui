@@ -46,3 +46,19 @@ INFER: no test/code fix is needed based on individual results. The remote40-minu
 
 13:50 UTC — OBSERVED: remote still emits only connection/health lines. Own CLI PID123652 jstack shows RemoteBuildWorkspace.execute:152 polling. Exact installed manager0.0.85 bytecode reads submission runId, then polls getBuildRun without printing the ID. Dashboard /api/runs reports outOfDate=true, runMembershipReconciled=false and only QF12:54 WUI runs; neither is assumed to be ours. BuildTestCli README exposes a direct list command, but repository-declared artifact0.0.3 is not published (resolution reports not found).
 INFER: silence does not prove submission failed; the pinned runner lacks run-id progress output. I am checking the direct read-only listing rather than inventing an id or resubmitting. No changes to service, dependency pins or runner scripts.
+
+2026-10-05 13:52:44 UTC — RUNNING status for original request: finish validating https://github.com/CodexCoder21Organization/ScreenshotTestWui/pull/4 at requested head, nine remaining scenarios plus full suite, fix failures. OBSERVED:9/9 named scenarios pass; PR live OPEN/UNSTABLE, head unchanged4b6e1d629177f91a2e329db91094adcc8037ea3b. No source fixes; classifier exact reported names, action status preservation and image404/500 were exercised by public HTTP scenarios. No delegated agents. Full remote command alive; direct public-API read-only RPC listing running to recover run ID because old runner does not print it. No user decision pending. Landing sweep: no landing authorized, no enqueue/merge gates launched.
+INFER: individual behavioral gates are closed; remote result is still unknown. Remaining path: obtain full-suite verdict/counts, update PR validation/OPEN list, final findings/head/process cleanup and exit. Transferable lesson: old runner silence can conceal a successfully submitted run; check its submission/poll code before treating absent output as absent execution.
+
+13:53 UTC — OBSERVED: standalone read-only public API listBuildRuns request failed at service handler after its existing30-second limit, exit1. This was an operational read, not a test and not a resubmission. Own protocol/connection closed in finally; no diagnostic process remains. Full-suite CLI still polling. Complete failure stack:
+
+```text
+Exception in thread "main" foundation.url.resolver.UrlResolutionException: RPC request 'listBuildRuns' failed: INTERNAL_ERROR - Service handler timed out after 30 seconds without producing a result. The handler may be blocked or deadlocked.
+	at foundation.url.resolver.PersistentRpcConnection.doSendRequest(UrlResolver.kt:29378)
+	at foundation.url.resolver.PersistentRpcConnection.sendRawRequest(UrlResolver.kt:29036)
+	at foundation.url.resolver.PersistentRpcConnection.sendRequestValue$foundation_url_resolver_sandbox(UrlResolver.kt:28997)
+	at foundation.url.resolver.PersistentRpcConnection.sendRequest(UrlResolver.kt:28981)
+	at foundation.url.resolver.PersistentRpcConnection.sendRequest(UrlResolver.kt:28971)
+	at Qf2BuildRunRead.main(Qf2BuildRunRead.java:9)
+```
+INFER: direct listing cannot currently recover the run ID. Neither this failure nor stale dashboard results establish that the submitted suite failed or passed. Full suite remains OPEN.
