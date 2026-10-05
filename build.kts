@@ -19,7 +19,7 @@ val dependencies = resolveDependencies2(
     MavenPrebuilt2("jakarta.servlet:jakarta.servlet-api:5.0.0"),
     // UrlResolver and UrlProtocol — the WUI connects to url://screenshottest/ as a typed proxy.
     // Resolver 0.0.1261 pairs protocol 0.0.532, libp2p snapshot-27 and SJVM 0.0.50; the four MUST
-    // move together. Kept in lockstep with BuildTestWui, which runs the same set in production.
+    // move together as published by the resolver's POM.
     MavenPrebuilt2("foundation.url:resolver:0.0.1261", resolveTransitiveDependencies = false),
     MavenPrebuilt2("foundation.url:protocol:0.0.532", resolveTransitiveDependencies = false),
     // SJVM for sandboxed execution (required by UrlResolver.openSandboxedConnection).
