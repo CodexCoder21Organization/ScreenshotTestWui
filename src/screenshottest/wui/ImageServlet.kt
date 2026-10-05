@@ -31,7 +31,12 @@ class ImageServlet : HttpServlet() {
             return
         }
 
-        val api = servletContext.getScreenshotTestApi()
+        val api = try {
+            servletContext.getScreenshotTestApi()
+        } catch (e: Exception) {
+            imageLoadFailed(resp, id, key, kind, e)
+            return
+        }
 
         // Probe the first slice. An IllegalArgumentException here means the service rejected the
         // session id, key, or kind (its message names the offending value); a null/empty first slice
@@ -43,9 +48,7 @@ class ImageServlet : HttpServlet() {
                 notFound(resp, "No image for session \"$id\", key \"$key\", kind \"$kind\": ${backendFailureMessage(e)}")
                 return
             }
-            resp.status = HttpServletResponse.SC_INTERNAL_SERVER_ERROR
-            resp.contentType = "text/plain; charset=UTF-8"
-            resp.writer.write("Failed to load image for session \"$id\", key \"$key\", kind \"$kind\": ${backendFailureMessage(e)}")
+            imageLoadFailed(resp, id, key, kind, e)
             return
         }
         if (first == null || first.isEmpty()) {
@@ -105,3 +108,9 @@ private fun notFound(resp: HttpServletResponse, message: String) {
 
 private fun sanitizeForFilename(s: String): String =
     s.map { c -> if (c.isLetterOrDigit() || c == '-' || c == '_' || c == '.') c else '_' }.joinToString("")
+
+private fun imageLoadFailed(resp: HttpServletResponse, id: String, key: String, kind: String, failure: Exception) {
+    resp.status = HttpServletResponse.SC_INTERNAL_SERVER_ERROR
+    resp.contentType = "text/plain; charset=UTF-8"
+    resp.writer.write("Failed to load image for session \"$id\", key \"$key\", kind \"$kind\": ${backendFailureMessage(failure)}")
+}
