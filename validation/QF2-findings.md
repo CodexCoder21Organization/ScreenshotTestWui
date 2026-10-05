@@ -13,3 +13,14 @@ Plan:
 
 OBSERVED: Previous QF final notes list 21/30 scenarios passed and nine open, plus full suite open. Last edit corrects numeric map conversion in both image probes. README and PR body agree with the brief invariants.
 INFER: Nine tests are validation work, with no source change needed unless a run demonstrates a defect. Dependency pins remain resolver 0.0.1261 / protocol 0.0.532.
+
+13:36 UTC — OBSERVED: first selector is compiling the sandbox fixture and WUI sources, not using a 3ms memoized artifact. Testing architecture read in full; test execution stays through Jetty/public API with isolated peers, full messages and existing budgets. No source edits. Initial evidence checkpoint pushed and ls-remote verified.
+INFER: cold compilation explains startup cost; no test verdict yet.
+
+Durable evidence: https://github.com/CodexCoder21Organization/ScreenshotTestWui/blob/wip/qf2-pr4-validation/validation/QF2-findings.md (evidence-only commit, not pushed to the PR branch).
+
+## Individual results on final source
+
+| Scenario | Result | Test duration | Evidence |
+|---|---|---|---|
+| `deleteReportedArgumentThroughRealSandboxTest` | PASS 1/1 | 15.172s | /tmp/qf2-deleteReportedArgumentThroughRealSandboxTest.xml |
