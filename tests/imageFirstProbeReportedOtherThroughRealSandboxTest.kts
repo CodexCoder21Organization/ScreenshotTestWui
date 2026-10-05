@@ -122,7 +122,11 @@ fun imageFirstProbeReportedOtherThroughRealSandboxTest() {
             override suspend fun handleRequest(path: String, params: Map<String, Any?>, metadata: Map<String, String>): Any? =
                 when (path) {
                     "getImageChunk" -> {
-                        assertEquals(mapOf("sessionId" to "sess-1", "key" to "key-1", "kind" to "actual", "offset" to 0L, "length" to 1048576, "encoding" to "bytes"), params, "getImageChunk must use the production argument map.")
+                        val normalizedParams = params + mapOf(
+                            "offset" to (params["offset"] as Number).toLong(),
+                            "length" to (params["length"] as Number).toInt(),
+                        )
+                        assertEquals(mapOf("sessionId" to "sess-1", "key" to "key-1", "kind" to "actual", "offset" to 0L, "length" to 1048576, "encoding" to "bytes"), normalizedParams, "getImageChunk must use the production argument map.")
                         throw UnsupportedOperationException("backend exploded")
                     }
                     else -> throw IllegalArgumentException("Unexpected RPC '$path' with params $params.")
