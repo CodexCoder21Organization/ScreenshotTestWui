@@ -38,4 +38,4 @@ if [ -n "$HTTP_PROXY" ]; then
   fi
 fi
 
-JAVA_OPTS="$JAVA_PROXY_OPTS" "$JAR_PATH" --shared-cache-root "$HOME/.aibuildcaches" "$@"
+JAVA_OPTS="$JAVA_PROXY_OPTS" "$JAR_PATH" --shared-cache-root "$HOME/.aibuildcaches" -w "$SCRIPT_PATH/.." "$@"
