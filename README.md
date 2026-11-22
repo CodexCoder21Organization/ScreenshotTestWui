@@ -70,6 +70,8 @@ captured as golden screenshots against the live `url://screenshottest/` renderer
 
 ## Building
 
+The build and test wrappers use kompile-cli 0.0.138 and build-kotlin-jvm 0.0.40. With one workspace root, they use the default bounded shared cache under `~/.aibuildcaches/v2/` (10 GiB total, 4 GiB per repository). Caller-supplied cache options and `KOMPILE_SHARED_CACHE_ROOT` remain available.
+
 The project builds with [kompile-cli](https://github.com/CodexCoder21Organization/kompile) via the
 wrapper in `scripts/`:
 
