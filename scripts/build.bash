@@ -10,7 +10,8 @@ fi
 
 SCRIPT_PATH="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 mkdir -p "$SCRIPT_PATH/../jars"
-JAR_PATH="$SCRIPT_PATH/../jars/KompileCli-0.0.132.jar"
+KOMPILE_CLI_VERSION="0.0.138"
+JAR_PATH="$SCRIPT_PATH/../jars/KompileCli-$KOMPILE_CLI_VERSION.jar"
 
 if [ ! -f "$JAR_PATH" ]; then
   # coursier is pinned to a release jar and checked against its SHA-256 before use. COURSIER may name
@@ -57,8 +58,8 @@ if [ ! -f "$JAR_PATH" ]; then
     coursier_command=(java -jar "$COURSIER_JAR")
   fi
 
-  echo "Fetching kompile.cli:kompile-cli:0.0.132 from https://kotlin.directory/..."
-  CLASSPATH=$("${coursier_command[@]}" fetch --repository https://kotlin.directory/ --repository central kompile.cli:kompile-cli:0.0.132 --classpath)
+  echo "Fetching kompile.cli:kompile-cli:$KOMPILE_CLI_VERSION from https://kotlin.directory/..."
+  CLASSPATH=$("${coursier_command[@]}" fetch --repository https://kotlin.directory/ --repository central kompile.cli:kompile-cli:$KOMPILE_CLI_VERSION --classpath)
 
   cat > "$JAR_PATH" <<'LAUNCHER_EOF'
 #!/bin/bash
@@ -82,4 +83,4 @@ if [ -n "$HTTP_PROXY" ]; then
   fi
 fi
 
-JAVA_OPTS="$JAVA_PROXY_OPTS" "$JAR_PATH" --shared-cache-root "$HOME/.aibuildcaches" -w "$SCRIPT_PATH/.." "$@"
+JAVA_OPTS="$JAVA_PROXY_OPTS" "$JAR_PATH" -w "$SCRIPT_PATH/.." "$@"
