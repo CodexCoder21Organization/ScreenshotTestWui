@@ -93,7 +93,7 @@ val dependencies = resolveDependencies2(
     MavenPrebuilt2("util.string:stringutils:0.0.1"),
     MavenPrebuilt2("resource.arena:resource-arena:0.0.1"),
     MavenPrebuilt2("kotlinc.diagnostic.collector:kotlinc-diagnostic-collector:0.0.1"),
-    MavenPrebuilt2("kompile.buildrule.enhancer:kompile-buildrule-enhancer:0.0.1"),
+    MavenPrebuilt2("kompile.buildrule.enhancer:kompile-buildrule-enhancer:0.0.9"),
     MavenPrebuilt2("refcounted:refcounted:0.0.1"),
     MavenPrebuilt2("util.jar:jarutils:0.0.1"),
     MavenPrebuilt2("kompile.interfaces.internal:kompile-interfaces-internal:0.0.1"),
